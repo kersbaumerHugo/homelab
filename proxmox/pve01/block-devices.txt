@@ -1,0 +1,17 @@
+NAME                           SIZE TYPE FSTYPE      MOUNTPOINTS         MODEL
+sda                          931.5G disk                                 ST1000DM010-2EP102
+└─sda1                       931.5G part ext4        /mnt/pve/hdd-backup 
+sdb                          476.9G disk                                 P3-512
+├─sdb1                        1007K part                                 
+├─sdb2                           1G part vfat        /boot/efi           
+└─sdb3                       475.9G part LVM2_member                     
+  ├─pve-swap                     8G lvm  swap        [SWAP]              
+  ├─pve-root                    64G lvm  ext4        /                   
+  ├─pve-data_tmeta               1G lvm                                  
+  │ └─pve-data-tpool           334G lvm                                  
+  │   ├─pve-data               334G lvm                                  
+  │   └─pve-vm--100--disk--0    32G lvm  ext4                            
+  └─pve-data_tdata             334G lvm                                  
+    └─pve-data-tpool           334G lvm                                  
+      ├─pve-data               334G lvm                                  
+      └─pve-vm--100--disk--0    32G lvm  ext4                            

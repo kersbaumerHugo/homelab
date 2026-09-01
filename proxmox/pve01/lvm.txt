@@ -1,0 +1,11 @@
+  PV         VG  Fmt  Attr PSize    PFree 
+  /dev/sdb3  pve lvm2 a--  <475.94g 67.94g
+
+  VG  #PV #LV #SN Attr   VSize    VFree 
+  pve   1   4   0 wz--n- <475.94g 67.94g
+
+  LV            VG  Attr       LSize    Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  data          pve twi-aotz-- <334.00g             1.23   1.84                            
+  root          pve -wi-ao----   64.00g                                                    
+  swap          pve -wi-ao----    8.00g                                                    
+  vm-100-disk-0 pve Vwi-aotz--   32.00g data        12.85                                  

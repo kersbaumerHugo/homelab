@@ -1,0 +1,13 @@
+smartctl 7.5 2025-04-30 r5714 [x86_64-linux-7.0.14-14-pve] (local build)
+Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
+
+=== START OF READ SMART DATA SECTION ===
+SMART overall-health self-assessment test result: PASSED
+
+  5 Reallocated_Sector_Ct   0x0013   100   100   050    Pre-fail  Always       -       0
+  9 Power_On_Hours          0x0012   100   100   000    Old_age   Always       -       1787
+177 Wear_Leveling_Count     0x0012   100   100   000    Old_age   Always       -       1228806005
+187 Reported_Uncorrect      0x0032   100   000   000    Old_age   Always       -       0
+194 Temperature_Celsius     0x0022   041   041   000    Old_age   Always       -       41 (Min/Max 34/64)
+196 Reallocated_Event_Count 0x0012   100   100   000    Old_age   Always       -       0
+199 UDMA_CRC_Error_Count    0x0012   100   100   000    Old_age   Always       -       0

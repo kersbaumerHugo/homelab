@@ -1,0 +1,7 @@
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+nic0             UP             
+vmbr0            UP             192.168.10.10/24 fe80::6d4:c4ff:fe05:12dd/64 
+veth100i0@if2    UP             
+
+default via 192.168.10.1 dev vmbr0 proto kernel onlink 
+192.168.10.0/24 dev vmbr0 proto kernel scope link src 192.168.10.10 
