@@ -232,17 +232,25 @@ ok "Grafana healthy"
 
 info "Checking pve01 Prometheus target"
 
-TARGET_HEALTH="$(remote "
-curl -s http://127.0.0.1:9090/api/v1/targets \
-| grep -o '192.168.10.10:9100[^}]*' \
-| grep -o 'health\":\"[^\"]*' \
-| head -1
-")"
+TARGET_UP=false
 
-echo "$TARGET_HEALTH"
+for attempt in {1..12}; do
+    TARGET_OUTPUT="$(remote \
+        "promtool query instant http://127.0.0.1:9090 'up{job=\"pve01\"}'" \
+        2>/dev/null || true)"
 
-grep -q 'health":"up' <<< "$TARGET_HEALTH" \
-    || fail "pve01 Prometheus target is not UP"
+    if grep -q '=> 1' <<< "$TARGET_OUTPUT"; then
+        TARGET_UP=true
+        echo "$TARGET_OUTPUT"
+        break
+    fi
+
+    echo "Waiting for Prometheus scrape... ($attempt/12)"
+    sleep 5
+done
+
+[[ "$TARGET_UP" == "true" ]] \
+    || fail "pve01 Prometheus target did not become UP within 60 seconds"
 
 ok "pve01 target UP"
 
