@@ -1,0 +1,34 @@
+# Secrets
+.env
+.env.*
+*.secret
+*.secrets
+*.key
+*.pem
+*.p12
+*.pfx
+credentials*
+secrets/
+
+# OPNsense backups contain sensitive data
+config.xml
+opnsense*.xml
+backups/
+
+# Terraform/OpenTofu
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+.tofu/
+
+# Ansible
+*.retry
+vault-password*
+.vault_pass*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+*~
