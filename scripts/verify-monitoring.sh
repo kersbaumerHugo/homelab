@@ -59,9 +59,20 @@ TEMP="$(remote \
 [[ -n "$TEMP" ]] || fail "CPU temperature metric missing"
 ok "CPU temperature metric available"
 
-ssh "$PVE_HOST" "systemctl --failed --no-legend" | grep -q . \
-    && fail "pve01 has failed systemd units" \
-    || true
+FAILED_UNITS="$(
+    ssh "$PVE_HOST" \
+        "systemctl show --property=NFailedUnits --value"
+)"
+
+if ! [[ "$FAILED_UNITS" =~ ^[0-9]+$ ]]; then
+    fail "Could not determine pve01 failed systemd unit count"
+fi
+
+if (( FAILED_UNITS > 0 )); then
+    ssh "$PVE_HOST" "systemctl --failed --no-pager" || true
+    fail "pve01 has $FAILED_UNITS failed systemd unit(s)"
+fi
+
 ok "pve01 has no failed systemd units"
 
 ssh "$PVE_HOST" "pvesm status" | grep -q '^hdd-backup.*active' \

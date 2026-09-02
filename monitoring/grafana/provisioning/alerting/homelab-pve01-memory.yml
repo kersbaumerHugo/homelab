@@ -68,7 +68,10 @@ groups:
           annotations:
             description: Available memory on pve01 has remained below 10% for 10 minutes.
             summary: pve01 memory pressure high
-          labels: {}
+          labels:
+  	    host: pve01
+            category: memory
+            severity: warning
           isPaused: false
           notification_settings:
             receiver: ntfy-homelab

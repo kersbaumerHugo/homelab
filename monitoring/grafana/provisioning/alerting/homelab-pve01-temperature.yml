@@ -57,8 +57,12 @@ groups:
                 type: threshold
           noDataState: NoData
           execErrState: Error
-          for: 1m
-          keepFiringFor: 2m
+          for: 2m
+          keepFiringFor: 1m
+          labels:
+            category: Thermal
+            host: pve01
+            severity: critical
           isPaused: false
           notification_settings:
             receiver: ntfy-homelab
@@ -70,7 +74,7 @@ groups:
               relativeTimeRange:
                 from: 300
                 to: 0
-              datasourceUid: efwybbw9hircwc
+              datasourceUid: prometheus
               model:
                 editorMode: code
                 expr: |-
@@ -114,79 +118,14 @@ groups:
                 type: threshold
           noDataState: NoData
           execErrState: Error
-          for: 1m
-          keepFiringFor: 5m
+          for: 5m
+          keepFiringFor: 1m
           annotations:
             summary: CPU temperature on pve01 has remained above 85°C for 5 minutes.
           labels:
             category: Thermal
             host: pve01
-            severity: ""
+            severity: high
           isPaused: false
           notification_settings:
             receiver: ntfy-homelab
-    - orgId: 1
-      name: Thermal group
-      folder: Homelab
-      interval: 1m
-      rules:
-        - uid: dfx1p5kryuk8we
-          title: pve01 - CPU temperature critical
-          condition: C
-          data:
-            - refId: A
-              relativeTimeRange:
-                from: 600
-                to: 0
-              datasourceUid: prometheus
-              model:
-                editorMode: code
-                expr: |-
-                    max(
-                      node_hwmon_temp_celsius{
-                        instance="192.168.10.10:9100",
-                        chip="platform_coretemp_0"
-                      }
-                    )
-                instant: true
-                intervalMs: 1000
-                legendFormat: __auto
-                maxDataPoints: 43200
-                range: false
-                refId: A
-            - refId: C
-              queryType: expression
-              datasourceUid: __expr__
-              model:
-                conditions:
-                    - evaluator:
-                        params:
-                            - 90
-                        type: gt
-                      operator:
-                        type: and
-                      query:
-                        params:
-                            - C
-                      reducer:
-                        params: []
-                        type: last
-                      type: query
-                datasource:
-                    type: __expr__
-                    uid: __expr__
-                expression: A
-                intervalMs: 1000
-                maxDataPoints: 43200
-                refId: C
-                type: threshold
-          noDataState: NoData
-          execErrState: Error
-          for: 1m
-          keepFiringFor: 2m
-          annotations: {}
-          labels: {}
-          isPaused: false
-          notification_settings:
-            receiver: ntfy-homelab
-
