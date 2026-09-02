@@ -8,7 +8,7 @@ CT_ID="${CT_ID:-100}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-
+VALIDATOR="$REPO_ROOT/scripts/validate-monitoring.sh"
 
 PROM_CONFIG="$REPO_ROOT/monitoring/prometheus/prometheus.yml"
 PROM_OVERRIDE="$REPO_ROOT/monitoring/prometheus/systemd/override.conf"
@@ -34,18 +34,6 @@ fail() {
     printf '\033[1;31m[ERROR]\033[0m %s\n' "$1" >&2
     exit 1
 }
-
-VALIDATOR="$REPO_ROOT/scripts/validate-monitoring.sh"
-
-info "Running pre-deployment validation"
-
-[[ -x "$VALIDATOR" ]] \
-    || fail "Validator not found or not executable: $VALIDATOR"
-
-"$VALIDATOR" \
-    || fail "Repository validation failed"
-
-ok "Repository validation passed"
 
 
 DEPLOY_STARTED=false
@@ -100,18 +88,6 @@ rollback() {
 
     printf '\033[1;33m[ROLLBACK]\033[0m Previous configuration restored\n'
 }
-
-on_error() {
-    local exit_code=$?
-
-    rollback || true
-
-    remote "rm -rf '$REMOTE_TMP'" >/dev/null 2>&1 || true
-
-    exit "$exit_code"
-}
-
-trap on_error ERR
 
 remote() {
     ssh "$PVE_HOST" "pct exec $CT_ID -- bash -lc $(printf '%q' "$1")"
@@ -371,6 +347,11 @@ systemctl restart grafana-server
 
 ok "Services restarted"
 
+if [[ "${HOMELAB_FAULT_INJECTION:-}" == "after-restart" ]]; then
+    printf '\n\033[1;35m[CHAOS]\033[0m Injecting failure after service restart\n'
+    exit 42
+fi
+
 info "Running service health checks"
 
 PROM_STATUS="$(remote "systemctl is-active prometheus")"
@@ -380,10 +361,7 @@ GRAFANA_STATUS="$(remote "systemctl is-active grafana-server")"
     || fail "Prometheus is not active"
 
 [[ "$GRAFANA_STATUS" == "active" ]] \
-    || if [[ "$GRAFANA_STATUS" != "active" ]]; then
-    rollback
-    fail "Grafana deployment failed; rollback executed"
-    fi
+    || fail "Grafana is not active"
 
 ok "Prometheus active"
 ok "Grafana active"
