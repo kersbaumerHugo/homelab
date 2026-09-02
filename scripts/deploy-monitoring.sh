@@ -173,6 +173,16 @@ install -o root -g root -m 0644 \
 
 ok "Prometheus files deployed"
 
+info "Synchronizing Grafana alerting provisioning"
+
+remote "
+find /etc/grafana/provisioning/alerting \
+  -maxdepth 1 \
+  -type f \
+  -name 'homelab-*.yml' \
+  -delete
+"
+
 info "Deploying Grafana provisioning"
 
 remote "
@@ -184,6 +194,8 @@ install -o root -g grafana -m 0644 \
     '$REMOTE_TMP/grafana-homelab.yml' \
     /etc/grafana/provisioning/dashboards/homelab.yml
 "
+
+
 
 for dashboard in "$GRAFANA_DASHBOARDS"/*.json; do
     [[ -e "$dashboard" ]] || continue
