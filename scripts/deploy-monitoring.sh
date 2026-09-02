@@ -118,14 +118,17 @@ for dashboard in "$GRAFANA_DASHBOARDS"/*.json; do
         "$REMOTE_TMP/$filename"
 done
 
-for alert_file in "$GRAFANA_ALERTING"/*.yml; do
-    [[ -e "$alert_file" ]] || continue
-
+while IFS= read -r -d '' alert_file; do
     filename="$(basename "$alert_file")"
 
     push_file "$alert_file" \
         "$REMOTE_TMP/$filename"
-done
+done < <(
+    find "$GRAFANA_ALERTING" \
+        -type f \
+        \( -name '*.yml' -o -name '*.yaml' \) \
+        -print0
+)
 
 
 ok "Candidate configuration uploaded"
