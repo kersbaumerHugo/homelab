@@ -28,6 +28,22 @@ if grep -RnP '\t' "$ROOT/monitoring" \
     exit 1
 fi
 
+NODE_EXPORTER_ENV="$ROOT/monitoring/node-exporter/pve01.env"
+
+echo "==> Checking Node Exporter configuration"
+
+[[ -f "$NODE_EXPORTER_ENV" ]] || {
+    echo "Missing Node Exporter configuration"
+    exit 1
+}
+
+bash -n "$NODE_EXPORTER_ENV"
+
+grep -q '^ARGS=' "$NODE_EXPORTER_ENV" || {
+    echo "Node Exporter configuration does not define ARGS"
+    exit 1
+}
+
 echo "==> Checking Grafana dashboards"
 
 find "$ROOT/monitoring/grafana/dashboards" \
