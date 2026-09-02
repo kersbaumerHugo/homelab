@@ -69,7 +69,7 @@ groups:
             description: Available memory on pve01 has remained below 10% for 10 minutes.
             summary: pve01 memory pressure high
           labels:
-  	    host: pve01
+            host: pve01
             category: memory
             severity: warning
           isPaused: false
