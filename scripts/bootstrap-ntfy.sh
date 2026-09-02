@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Remote commands intentionally expand PVE_HOST/CT_ID on the SSH client.
+# shellcheck disable=SC2029
 set -euo pipefail
 
 PVE_HOST="${PVE_HOST:-pve01}"
@@ -11,6 +13,8 @@ remote() {
 
 echo "==> Installing ntfy repository"
 
+# $ARCH is intentionally expanded inside mon01.
+# shellcheck disable=SC2016
 remote '
 mkdir -p /etc/apt/keyrings
 
