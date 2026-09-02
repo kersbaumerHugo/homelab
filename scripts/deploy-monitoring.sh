@@ -8,17 +8,7 @@ CT_ID="${CT_ID:-100}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-VALIDATOR="$REPO_ROOT/scripts/validate-monitoring.sh"
 
-info "Running pre-deployment validation"
-
-[[ -x "$VALIDATOR" ]] \
-    || fail "Validator not found or not executable: $VALIDATOR"
-
-"$VALIDATOR" \
-    || fail "Repository validation failed"
-
-ok "Repository validation passed"
 
 PROM_CONFIG="$REPO_ROOT/monitoring/prometheus/prometheus.yml"
 PROM_OVERRIDE="$REPO_ROOT/monitoring/prometheus/systemd/override.conf"
@@ -44,6 +34,19 @@ fail() {
     printf '\033[1;31m[ERROR]\033[0m %s\n' "$1" >&2
     exit 1
 }
+
+VALIDATOR="$REPO_ROOT/scripts/validate-monitoring.sh"
+
+info "Running pre-deployment validation"
+
+[[ -x "$VALIDATOR" ]] \
+    || fail "Validator not found or not executable: $VALIDATOR"
+
+"$VALIDATOR" \
+    || fail "Repository validation failed"
+
+ok "Repository validation passed"
+
 
 DEPLOY_STARTED=false
 ROLLING_BACK=false
