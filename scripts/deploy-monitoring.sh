@@ -12,6 +12,7 @@ PROM_OVERRIDE="$REPO_ROOT/monitoring/prometheus/systemd/override.conf"
 GRAFANA_DATASOURCE="$REPO_ROOT/monitoring/grafana/provisioning/datasources/prometheus.yml"
 GRAFANA_PROVIDER="$REPO_ROOT/monitoring/grafana/provisioning/dashboards/homelab.yml"
 GRAFANA_DASHBOARDS="$REPO_ROOT/monitoring/grafana/dashboards"
+GRAFANA_ALERTING="$REPO_ROOT/monitoring/grafana/provisioning/alerting"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 REMOTE_TMP="/tmp/homelab-deploy-$TIMESTAMP"
@@ -117,6 +118,16 @@ for dashboard in "$GRAFANA_DASHBOARDS"/*.json; do
         "$REMOTE_TMP/$filename"
 done
 
+for alert_file in "$GRAFANA_ALERTING"/*.yml; do
+    [[ -e "$alert_file" ]] || continue
+
+    filename="$(basename "$alert_file")"
+
+    push_file "$alert_file" \
+        "$REMOTE_TMP/$filename"
+done
+
+
 ok "Candidate configuration uploaded"
 
 info "Validating Prometheus configuration"
@@ -183,6 +194,18 @@ for dashboard in "$GRAFANA_DASHBOARDS"/*.json; do
     install -o grafana -g grafana -m 0644 \
         '$REMOTE_TMP/$filename' \
         '/var/lib/grafana/dashboards/$filename'
+    "
+done
+
+for alert_file in "$GRAFANA_ALERTING"/*.yml; do
+    [[ -e "$alert_file" ]] || continue
+
+    filename="$(basename "$alert_file")"
+
+    remote "
+    install -o root -g grafana -m 0644 \
+        '$REMOTE_TMP/$filename' \
+        '/etc/grafana/provisioning/alerting/$filename'
     "
 done
 
