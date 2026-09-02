@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Remote commands intentionally expand selected variables on the SSH client.
+# shellcheck disable=SC2029
 set -euo pipefail
 
 PVE_HOST="${PVE_HOST:-pve01}"
@@ -39,8 +41,9 @@ push_file() {
     local source="$1"
     local destination="$2"
 
-    cat "$source" | ssh "$PVE_HOST" \
-        "pct exec $CT_ID -- tee '$destination' >/dev/null"
+    ssh "$PVE_HOST" \
+    "pct exec $CT_ID -- tee '$destination' >/dev/null" \
+    < "$source"
 }
 
 required_files=(
