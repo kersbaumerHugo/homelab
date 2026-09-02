@@ -8,6 +8,8 @@ CT_ID="${CT_ID:-100}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+
+
 PROM_CONFIG="$REPO_ROOT/monitoring/prometheus/prometheus.yml"
 PROM_OVERRIDE="$REPO_ROOT/monitoring/prometheus/systemd/override.conf"
 
@@ -33,6 +35,84 @@ fail() {
     exit 1
 }
 
+VALIDATOR="$REPO_ROOT/scripts/validate-monitoring.sh"
+
+info "Running pre-deployment validation"
+
+[[ -x "$VALIDATOR" ]] \
+    || fail "Validator not found or not executable: $VALIDATOR"
+
+"$VALIDATOR" \
+    || fail "Repository validation failed"
+
+ok "Repository validation passed"
+
+
+DEPLOY_STARTED=false
+ROLLING_BACK=false
+# Called indirectly by the EXIT trap.
+# shellcheck disable=SC2329
+rollback() {
+    [[ "$DEPLOY_STARTED" == "true" ]] || return 0
+    [[ "$ROLLING_BACK" == "false" ]] || return 0
+
+    ROLLING_BACK=true
+
+    printf '\n\033[1;33m==> Rolling back monitoring deployment\033[0m\n'
+
+    remote "
+    if [[ -f '$BACKUP_DIR/prometheus.yml' ]]; then
+        cp -a '$BACKUP_DIR/prometheus.yml' \
+            /etc/prometheus/prometheus.yml
+    fi
+
+    if [[ -f '$BACKUP_DIR/prometheus-override.conf' ]]; then
+        cp -a '$BACKUP_DIR/prometheus-override.conf' \
+            /etc/systemd/system/prometheus.service.d/override.conf
+    fi
+
+    if [[ -f '$BACKUP_DIR/grafana-prometheus.yml' ]]; then
+        cp -a '$BACKUP_DIR/grafana-prometheus.yml' \
+            /etc/grafana/provisioning/datasources/prometheus.yml
+    fi
+
+    if [[ -f '$BACKUP_DIR/grafana-homelab.yml' ]]; then
+        cp -a '$BACKUP_DIR/grafana-homelab.yml' \
+            /etc/grafana/provisioning/dashboards/homelab.yml
+    fi
+
+    if [[ -d '$BACKUP_DIR/grafana-dashboards' ]]; then
+        rm -rf /var/lib/grafana/dashboards
+        cp -a '$BACKUP_DIR/grafana-dashboards' \
+            /var/lib/grafana/dashboards
+    fi
+
+    if [[ -d '$BACKUP_DIR/grafana-alerting' ]]; then
+        rm -rf /etc/grafana/provisioning/alerting
+        cp -a '$BACKUP_DIR/grafana-alerting' \
+            /etc/grafana/provisioning/alerting
+    fi
+
+    systemctl daemon-reload
+    systemctl restart prometheus || true
+    systemctl restart grafana-server || true
+    "
+
+    printf '\033[1;33m[ROLLBACK]\033[0m Previous configuration restored\n'
+}
+
+on_error() {
+    local exit_code=$?
+
+    rollback || true
+
+    remote "rm -rf '$REMOTE_TMP'" >/dev/null 2>&1 || true
+
+    exit "$exit_code"
+}
+
+trap on_error ERR
+
 remote() {
     ssh "$PVE_HOST" "pct exec $CT_ID -- bash -lc $(printf '%q' "$1")"
 }
@@ -46,12 +126,58 @@ push_file() {
     < "$source"
 }
 
+wait_for_health() {
+    local name="$1"
+    local url="$2"
+
+    for attempt in {1..12}; do
+        if remote "curl --fail --silent '$url'" >/dev/null 2>&1; then
+            ok "$name healthy"
+            return 0
+        fi
+
+        echo "Waiting for $name... ($attempt/12)"
+        sleep 5
+    done
+
+    printf '\033[1;31m[ERROR]\033[0m %s did not become healthy\n' "$name" >&2
+    return 1
+}
+
+# Called indirectly by the EXIT trap.
+# shellcheck disable=SC2329
+on_exit() {
+    local exit_code="$1"
+
+    # Successful exit: nothing to recover.
+    if (( exit_code == 0 )); then
+        return 0
+    fi
+
+    if [[ "$DEPLOY_STARTED" == "true" ]]; then
+        rollback || true
+    fi
+
+    remote "rm -rf '$REMOTE_TMP'" >/dev/null 2>&1 || true
+}
+
+trap 'on_exit $?' EXIT
+
 required_files=(
     "$PROM_CONFIG"
     "$PROM_OVERRIDE"
     "$GRAFANA_DATASOURCE"
     "$GRAFANA_PROVIDER"
 )
+
+info "Running pre-deployment validation"
+
+[[ -x "$VALIDATOR" ]] \
+    || fail "Validator not found or not executable: $VALIDATOR"
+
+"$VALIDATOR"
+
+ok "Repository validation passed"
 
 info "Validating local repository files"
 
@@ -161,9 +287,15 @@ cp -a /etc/grafana/provisioning/dashboards/homelab.yml \
 
 cp -a /var/lib/grafana/dashboards \
     '$BACKUP_DIR/grafana-dashboards' 2>/dev/null || true
+    
+cp -a /etc/grafana/provisioning/alerting \
+    '$BACKUP_DIR/grafana-alerting' 2>/dev/null || true
+    
 "
 
 ok "Backup created at $BACKUP_DIR"
+
+DEPLOY_STARTED=true
 
 info "Deploying Prometheus"
 
@@ -248,28 +380,23 @@ GRAFANA_STATUS="$(remote "systemctl is-active grafana-server")"
     || fail "Prometheus is not active"
 
 [[ "$GRAFANA_STATUS" == "active" ]] \
-    || fail "Grafana is not active"
+    || if [[ "$GRAFANA_STATUS" != "active" ]]; then
+    rollback
+    fail "Grafana deployment failed; rollback executed"
+    fi
 
 ok "Prometheus active"
 ok "Grafana active"
 
-info "Checking Prometheus health endpoint"
+info "Checking application health"
 
-remote "
-curl --fail --silent \
-    http://127.0.0.1:9090/-/healthy
-"
+wait_for_health \
+    "Prometheus" \
+    "http://127.0.0.1:9090/-/healthy"
 
-ok "Prometheus healthy"
-
-info "Checking Grafana health endpoint"
-
-remote "
-curl --fail --silent \
-    http://127.0.0.1:3000/api/health
-"
-
-ok "Grafana healthy"
+wait_for_health \
+    "Grafana" \
+    "http://127.0.0.1:3000/api/health"
 
 info "Checking pve01 Prometheus target"
 
@@ -294,6 +421,9 @@ done
     || fail "pve01 Prometheus target did not become UP within 60 seconds"
 
 ok "pve01 target UP"
+
+DEPLOY_STARTED=false
+trap - EXIT
 
 info "Cleaning temporary deployment files"
 
