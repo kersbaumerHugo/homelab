@@ -8,6 +8,8 @@ CT_ID="${CT_ID:-100}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+NODE_EXPORTER_ENV="$REPO_ROOT/monitoring/node-exporter/pve01.env"
+
 VALIDATOR="$REPO_ROOT/scripts/validate-monitoring.sh"
 
 PROM_CONFIG="$REPO_ROOT/monitoring/prometheus/prometheus.yml"
@@ -21,6 +23,9 @@ GRAFANA_ALERTING="$REPO_ROOT/monitoring/grafana/provisioning/alerting"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 REMOTE_TMP="/tmp/homelab-deploy-$TIMESTAMP"
 BACKUP_DIR="/root/homelab-config-backups/$TIMESTAMP"
+
+HOST_REMOTE_TMP="/tmp/homelab-host-deploy-$TIMESTAMP"
+HOST_BACKUP_DIR="/root/homelab-host-config-backups/$TIMESTAMP"
 
 info() {
     printf '\n\033[1;34m==>\033[0m %s\n' "$1"
@@ -47,6 +52,15 @@ rollback() {
     ROLLING_BACK=true
 
     printf '\n\033[1;33m==> Rolling back monitoring deployment\033[0m\n'
+
+ssh "$PVE_HOST" "
+if [[ -f '$HOST_BACKUP_DIR/prometheus-node-exporter' ]]; then
+    cp -a '$HOST_BACKUP_DIR/prometheus-node-exporter' \
+        /etc/default/prometheus-node-exporter
+
+    systemctl restart prometheus-node-exporter || true
+fi
+"
 
     remote "
     if [[ -f '$BACKUP_DIR/prometheus.yml' ]]; then
@@ -120,6 +134,15 @@ wait_for_health() {
     return 1
 }
 
+push_host_file() {
+    local source="$1"
+    local destination="$2"
+
+    ssh "$PVE_HOST" \
+        "tee '$destination' >/dev/null" \
+        < "$source"
+}
+
 # Called indirectly by the EXIT trap.
 # shellcheck disable=SC2329
 on_exit() {
@@ -144,6 +167,7 @@ required_files=(
     "$PROM_OVERRIDE"
     "$GRAFANA_DATASOURCE"
     "$GRAFANA_PROVIDER"
+    "$NODE_EXPORTER_ENV"
 )
 
 info "Running pre-deployment validation"
@@ -187,6 +211,11 @@ ok "Monitoring container is running"
 
 info "Preparing temporary and backup directories"
 
+ssh "$PVE_HOST" "
+mkdir -p '$HOST_REMOTE_TMP'
+mkdir -p '$HOST_BACKUP_DIR'
+"
+
 remote "
 mkdir -p '$REMOTE_TMP'
 mkdir -p '$BACKUP_DIR'
@@ -214,6 +243,10 @@ push_file "$GRAFANA_DATASOURCE" \
 push_file "$GRAFANA_PROVIDER" \
     "$REMOTE_TMP/grafana-homelab.yml"
 
+push_host_file \
+    "$NODE_EXPORTER_ENV" \
+    "$HOST_REMOTE_TMP/prometheus-node-exporter"
+
 for dashboard in "$GRAFANA_DASHBOARDS"/*.json; do
     [[ -e "$dashboard" ]] || continue
 
@@ -235,6 +268,8 @@ done < <(
         -print0
 )
 
+ssh "$PVE_HOST" \
+    "bash -n '$HOST_REMOTE_TMP/prometheus-node-exporter'"
 
 ok "Candidate configuration uploaded"
 
@@ -271,7 +306,27 @@ cp -a /etc/grafana/provisioning/alerting \
 
 ok "Backup created at $BACKUP_DIR"
 
+
+ssh "$PVE_HOST" "
+cp -a /etc/default/prometheus-node-exporter \
+    '$HOST_BACKUP_DIR/prometheus-node-exporter' \
+    2>/dev/null || true
+"
+
 DEPLOY_STARTED=true
+
+info "Deploying Node Exporter configuration"
+
+ssh "$PVE_HOST" "
+install -o root -g root -m 0644 \
+    '$HOST_REMOTE_TMP/prometheus-node-exporter' \
+    /etc/default/prometheus-node-exporter
+
+systemctl restart prometheus-node-exporter
+"
+
+ok "Node Exporter configuration deployed"
+
 
 info "Deploying Prometheus"
 
@@ -336,6 +391,29 @@ for alert_file in "$GRAFANA_ALERTING"/*.yml; do
 done
 
 ok "Grafana files deployed"
+
+
+info "Checking Node Exporter filesystem metrics"
+
+NODE_EXPORTER_READY=false
+
+for attempt in {1..12}; do
+    if ssh "$PVE_HOST" \
+        "curl --fail --silent http://127.0.0.1:9100/metrics \
+        | grep -q 'mountpoint=\"/mnt/pve/hdd-backup\"'"; then
+
+        NODE_EXPORTER_READY=true
+        break
+    fi
+
+    echo "Waiting for Node Exporter... ($attempt/12)"
+    sleep 5
+done
+
+[[ "$NODE_EXPORTER_READY" == "true" ]] \
+    || fail "Node Exporter did not expose hdd-backup filesystem metrics"
+
+ok "hdd-backup filesystem metric exposed"
 
 info "Reloading services"
 
@@ -408,6 +486,8 @@ info "Cleaning temporary deployment files"
 remote "
 rm -rf '$REMOTE_TMP'
 "
+ssh "$PVE_HOST" "rm -rf '$HOST_REMOTE_TMP'"
+
 
 printf '\n'
 printf '\033[1;32m========================================\033[0m\n'

@@ -8,6 +8,8 @@ CT_ID="${CT_ID:-100}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+NODE_EXPORTER_ENV="$REPO_ROOT/monitoring/node-exporter/pve01.env"
+
 PROM_CONFIG="$REPO_ROOT/monitoring/prometheus/prometheus.yml"
 PROM_OVERRIDE="$REPO_ROOT/monitoring/prometheus/systemd/override.conf"
 
@@ -105,6 +107,32 @@ verify_sync() {
         bad "$description drift detected"
     fi
 }
+
+verify_host_sync() {
+    local local_file="$1"
+    local remote_file="$2"
+    local description="$3"
+
+    local local_sha
+    local remote_sha
+
+    local_sha="$(sha256sum "$local_file" | awk '{print $1}')"
+
+    remote_sha="$(
+        ssh "$PVE_HOST" \
+            "sha256sum '$remote_file' 2>/dev/null | awk '{print \$1}'" \
+            2>/dev/null || true
+    )"
+
+    if [[ -z "$remote_sha" ]]; then
+        bad "$description missing from pve01"
+    elif [[ "$local_sha" == "$remote_sha" ]]; then
+        ok "$description synchronized"
+    else
+        bad "$description drift detected"
+    fi
+}
+
 check_http_health() {
     local name="$1"
     local url="$2"
@@ -359,6 +387,11 @@ verify_sync \
     "$NTFY_CONFIG" \
     "/etc/ntfy/server.yml" \
     "ntfy configuration"
+    
+verify_host_sync \
+    "$NODE_EXPORTER_ENV" \
+    "/etc/default/prometheus-node-exporter" \
+    "Node Exporter configuration"
 
 while IFS= read -r -d '' dashboard; do
     filename="$(basename "$dashboard")"
