@@ -1,0 +1,8 @@
+vmid: 100
+name: mon01
+
+boot:
+  onboot: true
+  order: 10
+  startup_delay_seconds: 30
+  shutdown_timeout_seconds: 60
