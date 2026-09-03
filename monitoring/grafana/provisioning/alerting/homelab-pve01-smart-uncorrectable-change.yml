@@ -1,0 +1,74 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: pve01 - SMART reported uncorrectable increased
+    folder: Homelab - Storage
+    interval: 1m
+
+    rules:
+      - uid: pve01smartuncnew
+        title: pve01 - SMART reported uncorrectable increased
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                changes(homelab_smart_reported_uncorrectable{instance="192.168.10.10:9100"}[24h])
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: New SMART uncorrectable error detected
+          description: A disk reported a change in its uncorrectable-error counter during the last 24 hours.
+
+        labels:
+          category: smart
+          host: pve01
+          severity: critical
+
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab

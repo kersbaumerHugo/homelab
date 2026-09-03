@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-LVM_SERVICE="$ROOT/monitoring/node-exporter/systemd/homelab-lvm-collector.service"
-LVM_TIMER="$ROOT/monitoring/node-exporter/systemd/homelab-lvm-collector.timer"
+SYSTEMD_DIR="$ROOT/monitoring/node-exporter/systemd"
+
 echo "==> Checking YAML"
 
 find "$ROOT/monitoring" \
@@ -19,6 +19,52 @@ with open(sys.argv[1]) as f:
     yaml.safe_load(f)
 ' "$file"
 done
+echo "==> Checking Grafana alert state enums"
+
+python3 - "$ROOT/monitoring/grafana/provisioning/alerting" <<'PY'
+import pathlib
+import sys
+import yaml
+
+root = pathlib.Path(sys.argv[1])
+
+valid_no_data = {
+    "NoData",
+    "Alerting",
+    "OK",
+    "KeepLastState",
+}
+
+valid_exec_error = {
+    "Error",
+    "Alerting",
+    "OK",
+    "KeepLastState",
+}
+
+for path in root.glob("*.yml"):
+    data = yaml.safe_load(path.read_text()) or {}
+
+    for group in data.get("groups", []):
+        for rule in group.get("rules", []):
+            title = rule.get("title", "<unknown>")
+
+            no_data = rule.get("noDataState")
+            if no_data not in valid_no_data:
+                raise SystemExit(
+                    f"{path}: rule {title!r}: "
+                    f"invalid noDataState {no_data!r}"
+                )
+
+            exec_error = rule.get("execErrState")
+            if exec_error not in valid_exec_error:
+                raise SystemExit(
+                    f"{path}: rule {title!r}: "
+                    f"invalid execErrState {exec_error!r}"
+                )
+
+print("Grafana alert state enums valid")
+PY
 
 echo "==> Checking for tabs in YAML"
 
@@ -46,42 +92,60 @@ grep -q '^ARGS=' "$NODE_EXPORTER_ENV" || {
     exit 1
 }
 
+echo "==> Checking Python collectors"
+
+find "$ROOT/monitoring/node-exporter" \
+    -type f \
+    -name '*.py' \
+    -print0 |
+while IFS= read -r -d '' file; do
+    echo "Checking $file"
+
+    python3 -c '
+import ast
+import pathlib
+import sys
+
+ast.parse(
+    pathlib.Path(sys.argv[1]).read_text()
+)
+' "$file"
+done
+
 
 echo "==> Checking systemd units"
-
-for file in "$LVM_SERVICE" "$LVM_TIMER"; do
-    [[ -f "$file" ]] || {
-        echo "Missing systemd unit: $file"
-        exit 1
-    }
-done
 
 SYSTEMD_TMP="$(mktemp -d)"
 
 cleanup_systemd_validation() {
     rm -rf "$SYSTEMD_TMP"
 }
+
 trap cleanup_systemd_validation RETURN
 
-cp "$LVM_SERVICE" \
-    "$SYSTEMD_TMP/homelab-lvm-collector.service"
+while IFS= read -r -d '' unit; do
+    filename="$(basename "$unit")"
+    cp "$unit" "$SYSTEMD_TMP/$filename"
+done < <(
+    find "$SYSTEMD_DIR" \
+        -maxdepth 1 \
+        -type f \
+        \( -name '*.service' -o -name '*.timer' \) \
+        -print0
+)
 
-cp "$LVM_TIMER" \
-    "$SYSTEMD_TMP/homelab-lvm-collector.timer"
+for service in "$SYSTEMD_TMP"/*.service; do
+    [[ -e "$service" ]] || continue
 
-# The CI runner does not have the production collector installed.
-# Replace only ExecStart so systemd-analyze can validate unit semantics.
-sed -i \
-    's#^ExecStart=.*#ExecStart=/bin/true#' \
-    "$SYSTEMD_TMP/homelab-lvm-collector.service"
+    sed -i \
+        's#^ExecStart=.*#ExecStart=/bin/true#' \
+        "$service"
+done
 
-systemd-analyze verify \
-    "$SYSTEMD_TMP/homelab-lvm-collector.service" \
-    "$SYSTEMD_TMP/homelab-lvm-collector.timer"
+systemd-analyze verify "$SYSTEMD_TMP"/*
 
 rm -rf "$SYSTEMD_TMP"
 trap - RETURN
-
 
 echo "==> Checking Grafana dashboards"
 

@@ -1,8 +1,8 @@
 apiVersion: 1
 groups:
     - orgId: 1
-      name: Down
-      folder: Homelab
+      name: pve01 - Availability
+      folder: Homelab - Availability
       interval: 1m
       rules:
         - uid: bfx1nl4wrzugwf

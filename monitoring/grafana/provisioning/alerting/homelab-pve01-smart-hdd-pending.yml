@@ -1,0 +1,74 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: pve01 - HDD pending sectors
+    folder: Homelab - Storage
+    interval: 1m
+
+    rules:
+      - uid: pve01smarthddpend
+        title: pve01 - HDD pending sectors
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                homelab_smart_pending_sectors{instance="192.168.10.10:9100",device="hdd-backup"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: Backup HDD has pending sectors
+          description: One or more sectors are waiting to be remapped on the backup HDD.
+
+        labels:
+          category: smart
+          host: pve01
+          severity: critical
+          device: hdd-backup
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab

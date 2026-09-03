@@ -9,9 +9,14 @@ CT_ID="${CT_ID:-100}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 NODE_EXPORTER_ENV="$REPO_ROOT/monitoring/node-exporter/pve01.env"
+
 LVM_COLLECTOR="$REPO_ROOT/monitoring/node-exporter/lvm-collector.sh"
 LVM_SERVICE="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-lvm-collector.service"
 LVM_TIMER="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-lvm-collector.timer"
+
+SMART_COLLECTOR="$REPO_ROOT/monitoring/node-exporter/smart-collector.py"
+SMART_SERVICE="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-smart-collector.service"
+SMART_TIMER="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-smart-collector.timer"
 
 VALIDATOR="$REPO_ROOT/scripts/validate-monitoring.sh"
 
@@ -207,6 +212,9 @@ required_files=(
     "$LVM_COLLECTOR"
     "$LVM_SERVICE"
     "$LVM_TIMER"
+    "$SMART_COLLECTOR"
+    "$SMART_SERVICE"
+    "$SMART_TIMER"
 )
 
 info "Running pre-deployment validation"
@@ -282,10 +290,12 @@ push_file "$GRAFANA_DATASOURCE" \
 push_file "$GRAFANA_PROVIDER" \
     "$REMOTE_TMP/grafana-homelab.yml"
 
+#Node Exporter
 push_host_file \
     "$NODE_EXPORTER_ENV" \
     "$HOST_REMOTE_TMP/prometheus-node-exporter"
     
+#LVM
 push_host_file \
     "$LVM_COLLECTOR" \
     "$HOST_REMOTE_TMP/homelab-lvm-collector"
@@ -297,6 +307,20 @@ push_host_file \
 push_host_file \
     "$LVM_TIMER" \
     "$HOST_REMOTE_TMP/homelab-lvm-collector.timer"
+
+#Smart
+push_host_file \
+    "$SMART_COLLECTOR" \
+    "$HOST_REMOTE_TMP/homelab-smart-collector"
+
+push_host_file \
+    "$SMART_SERVICE" \
+    "$HOST_REMOTE_TMP/homelab-smart-collector.service"
+
+push_host_file \
+    "$SMART_TIMER" \
+    "$HOST_REMOTE_TMP/homelab-smart-collector.timer"
+
 
 for dashboard in "$GRAFANA_DASHBOARDS"/*.json; do
     [[ -e "$dashboard" ]] || continue
@@ -388,6 +412,38 @@ if systemctl is-enabled --quiet homelab-lvm-collector.timer 2>/dev/null; then
 fi
 "
 
+#SMART
+ssh "$PVE_HOST" "
+if [[ -e /usr/local/sbin/homelab-smart-collector ]]; then
+    touch '$HOST_BACKUP_DIR/smart-collector.existed'
+    cp -a /usr/local/sbin/homelab-smart-collector \
+        '$HOST_BACKUP_DIR/homelab-smart-collector'
+fi
+
+if [[ -e /etc/systemd/system/homelab-smart-collector.service ]]; then
+    touch '$HOST_BACKUP_DIR/smart-service.existed'
+    cp -a /etc/systemd/system/homelab-smart-collector.service \
+        '$HOST_BACKUP_DIR/homelab-smart-collector.service'
+fi
+
+if [[ -e /etc/systemd/system/homelab-smart-collector.timer ]]; then
+    touch '$HOST_BACKUP_DIR/smart-timer.existed'
+    cp -a /etc/systemd/system/homelab-smart-collector.timer \
+        '$HOST_BACKUP_DIR/homelab-smart-collector.timer'
+fi
+
+if [[ -e /var/lib/prometheus/node-exporter/homelab_smart.prom ]]; then
+    touch '$HOST_BACKUP_DIR/smart-prom.existed'
+    cp -a /var/lib/prometheus/node-exporter/homelab_smart.prom \
+        '$HOST_BACKUP_DIR/homelab_smart.prom'
+fi
+
+if systemctl is-enabled --quiet homelab-smart-collector.timer 2>/dev/null; then
+    touch '$HOST_BACKUP_DIR/smart-timer.enabled'
+fi
+"
+
+
 DEPLOY_STARTED=true
 
 info "Deploying Node Exporter configuration"
@@ -425,6 +481,29 @@ systemctl start homelab-lvm-collector.service
 "
 
 ok "LVM collector deployed"
+
+info "Deploying SMART collector"
+
+ssh "$PVE_HOST" "
+install -o root -g root -m 0755 \
+    '$HOST_REMOTE_TMP/homelab-smart-collector' \
+    /usr/local/sbin/homelab-smart-collector
+
+install -o root -g root -m 0644 \
+    '$HOST_REMOTE_TMP/homelab-smart-collector.service' \
+    /etc/systemd/system/homelab-smart-collector.service
+
+install -o root -g root -m 0644 \
+    '$HOST_REMOTE_TMP/homelab-smart-collector.timer' \
+    /etc/systemd/system/homelab-smart-collector.timer
+
+systemctl daemon-reload
+systemctl enable --now homelab-smart-collector.timer
+systemctl start homelab-smart-collector.service
+"
+
+ok "SMART collector deployed"
+
 
 info "Deploying Prometheus"
 
@@ -512,6 +591,27 @@ done
     || fail "Node Exporter did not expose hdd-backup filesystem metrics"
 
 ok "hdd-backup filesystem metric exposed"
+
+SMART_TIMER_STATUS="$(
+    ssh "$PVE_HOST" \
+        "systemctl is-active homelab-smart-collector.timer" \
+        2>/dev/null || true
+)"
+
+[[ "$SMART_TIMER_STATUS" == "active" ]] \
+    || fail "SMART collector timer is not active"
+
+SMART_METRICS="$(
+    ssh "$PVE_HOST" \
+        "curl -fsS http://127.0.0.1:9100/metrics \
+        | grep '^homelab_smart_'" \
+        2>/dev/null || true
+)"
+
+grep -q 'homelab_smart_collector_success 1' <<< "$SMART_METRICS" \
+    || fail "SMART collector did not publish successful metrics"
+
+ok "SMART collector timer active and metrics available"
 
 info "Checking LVM collector"
 
