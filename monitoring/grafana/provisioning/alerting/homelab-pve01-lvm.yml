@@ -1,0 +1,425 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: lvm
+    folder: Homelab
+    interval: 1m
+
+    rules:
+      # ------------------------------------------------------------
+      # Thin pool DATA
+      # ------------------------------------------------------------
+
+      - uid: pve01lvmdataw
+        title: pve01 - LVM thin data usage warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                homelab_lvm_thin_data_percent{
+                  instance="192.168.10.10:9100",
+                  vg="pve",
+                  lv="data"
+                }
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 80
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 10m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: pve01 LVM thin pool data usage high
+          description: LVM thin pool pve/data has remained above 80% data usage for 10 minutes.
+
+        labels:
+          category: lvm
+          host: pve01
+          severity: warning
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab
+
+      - uid: pve01lvmdatac
+        title: pve01 - LVM thin data usage critical
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                homelab_lvm_thin_data_percent{
+                  instance="192.168.10.10:9100",
+                  vg="pve",
+                  lv="data"
+                }
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 90
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: pve01 LVM thin pool data usage critical
+          description: LVM thin pool pve/data has remained above 90% data usage for 5 minutes.
+
+        labels:
+          category: lvm
+          host: pve01
+          severity: critical
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab
+
+      # ------------------------------------------------------------
+      # Thin pool METADATA
+      # ------------------------------------------------------------
+
+      - uid: pve01lvmmetaw
+        title: pve01 - LVM thin metadata usage warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                homelab_lvm_thin_metadata_percent{
+                  instance="192.168.10.10:9100",
+                  vg="pve",
+                  lv="data"
+                }
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 80
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 10m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: pve01 LVM thin pool metadata usage high
+          description: LVM thin pool pve/data metadata usage has remained above 80% for 10 minutes.
+
+        labels:
+          category: lvm
+          host: pve01
+          severity: warning
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab
+
+      - uid: pve01lvmmetac
+        title: pve01 - LVM thin metadata usage critical
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                homelab_lvm_thin_metadata_percent{
+                  instance="192.168.10.10:9100",
+                  vg="pve",
+                  lv="data"
+                }
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 90
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: pve01 LVM thin pool metadata usage critical
+          description: LVM thin pool pve/data metadata usage has remained above 90% for 5 minutes.
+
+        labels:
+          category: lvm
+          host: pve01
+          severity: critical
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab
+
+      # ------------------------------------------------------------
+      # Collector HEALTH
+      # ------------------------------------------------------------
+
+      - uid: pve01lvmcolf
+        title: pve01 - LVM collector failed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                homelab_lvm_collector_success{
+                  instance="192.168.10.10:9100"
+                }
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: pve01 LVM metrics collector failed
+          description: The LVM collector is reporting an unsuccessful execution.
+
+        labels:
+          category: lvm
+          host: pve01
+          severity: critical
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab
+
+      - uid: pve01lvmstale
+        title: pve01 - LVM collector metrics stale
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                time() -
+                homelab_lvm_collector_last_run_unixtime{
+                  instance="192.168.10.10:9100"
+                }
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 180
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: pve01 LVM metrics are stale
+          description: The LVM collector has not produced fresh metrics for more than 3 minutes.
+
+        labels:
+          category: lvm
+          host: pve01
+          severity: critical
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab
