@@ -186,6 +186,15 @@ section "Host services"
 
 host_service prometheus-node-exporter
 host_service smartmontools
+if [[ "$(ssh "$PVE_HOST" \
+    "systemctl is-active homelab-lvm-collector.timer" \
+    2>/dev/null)" == "active" ]]; then
+
+    ok "LVM collector timer active"
+else
+    bad "LVM collector timer inactive"
+fi
+
 
 section "Monitoring services"
 
@@ -246,6 +255,26 @@ prom_metric \
 prom_metric \
     'node_filesystem_size_bytes{instance="192.168.10.10:9100",mountpoint="/mnt/pve/hdd-backup"}' \
     "Backup filesystem metric available"
+    
+prom_metric \
+    'homelab_lvm_collector_success{instance="192.168.10.10:9100"} == 1' \
+    "LVM collector healthy"
+
+prom_metric \
+    'homelab_lvm_thin_data_percent{instance="192.168.10.10:9100",vg="pve",lv="data"}' \
+    "LVM thin data metric available"
+
+prom_metric \
+    'homelab_lvm_thin_metadata_percent{instance="192.168.10.10:9100",vg="pve",lv="data"}' \
+    "LVM thin metadata metric available"
+
+prom_metric \
+    'homelab_lvm_thin_size_bytes{instance="192.168.10.10:9100",vg="pve",lv="data"}' \
+    "LVM thin size metric available"
+    
+prom_metric \
+    'time() - homelab_lvm_collector_last_run_unixtime{instance="192.168.10.10:9100"} < 180' \
+    "LVM collector metric fresh"
 
 section "Systemd health"
 
