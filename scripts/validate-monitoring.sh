@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+LVM_SERVICE="$ROOT/monitoring/node-exporter/systemd/homelab-lvm-collector.service"
+LVM_TIMER="$ROOT/monitoring/node-exporter/systemd/homelab-lvm-collector.timer"
 echo "==> Checking YAML"
 
 find "$ROOT/monitoring" \
@@ -43,6 +45,43 @@ grep -q '^ARGS=' "$NODE_EXPORTER_ENV" || {
     echo "Node Exporter configuration does not define ARGS"
     exit 1
 }
+
+
+echo "==> Checking systemd units"
+
+for file in "$LVM_SERVICE" "$LVM_TIMER"; do
+    [[ -f "$file" ]] || {
+        echo "Missing systemd unit: $file"
+        exit 1
+    }
+done
+
+SYSTEMD_TMP="$(mktemp -d)"
+
+cleanup_systemd_validation() {
+    rm -rf "$SYSTEMD_TMP"
+}
+trap cleanup_systemd_validation RETURN
+
+cp "$LVM_SERVICE" \
+    "$SYSTEMD_TMP/homelab-lvm-collector.service"
+
+cp "$LVM_TIMER" \
+    "$SYSTEMD_TMP/homelab-lvm-collector.timer"
+
+# The CI runner does not have the production collector installed.
+# Replace only ExecStart so systemd-analyze can validate unit semantics.
+sed -i \
+    's#^ExecStart=.*#ExecStart=/bin/true#' \
+    "$SYSTEMD_TMP/homelab-lvm-collector.service"
+
+systemd-analyze verify \
+    "$SYSTEMD_TMP/homelab-lvm-collector.service" \
+    "$SYSTEMD_TMP/homelab-lvm-collector.timer"
+
+rm -rf "$SYSTEMD_TMP"
+trap - RETURN
+
 
 echo "==> Checking Grafana dashboards"
 

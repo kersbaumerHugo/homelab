@@ -1,0 +1,16 @@
+[Unit]
+Description=Homelab LVM metrics collector
+After=lvm2-monitor.service
+ConditionPathIsDirectory=/var/lib/prometheus/node-exporter
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/homelab-lvm-collector
+
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/prometheus/node-exporter /run/lock/lvm
+PrivateTmp=true

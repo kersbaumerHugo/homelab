@@ -9,6 +9,9 @@ CT_ID="${CT_ID:-100}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 NODE_EXPORTER_ENV="$REPO_ROOT/monitoring/node-exporter/pve01.env"
+LVM_COLLECTOR="$REPO_ROOT/monitoring/node-exporter/lvm-collector.sh"
+LVM_SERVICE="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-lvm-collector.service"
+LVM_TIMER="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-lvm-collector.timer"
 
 VALIDATOR="$REPO_ROOT/scripts/validate-monitoring.sh"
 
@@ -52,16 +55,49 @@ rollback() {
     ROLLING_BACK=true
 
     printf '\n\033[1;33m==> Rolling back monitoring deployment\033[0m\n'
-
+## node exporter e lvm exporter
 ssh "$PVE_HOST" "
-if [[ -f '$HOST_BACKUP_DIR/prometheus-node-exporter' ]]; then
-    cp -a '$HOST_BACKUP_DIR/prometheus-node-exporter' \
-        /etc/default/prometheus-node-exporter
+systemctl disable --now homelab-lvm-collector.timer \
+    2>/dev/null || true
 
-    systemctl restart prometheus-node-exporter || true
+if [[ -f '$HOST_BACKUP_DIR/lvm-collector.existed' ]]; then
+    cp -a '$HOST_BACKUP_DIR/homelab-lvm-collector' \
+        /usr/local/sbin/homelab-lvm-collector
+else
+    rm -f /usr/local/sbin/homelab-lvm-collector
 fi
-"
 
+if [[ -f '$HOST_BACKUP_DIR/lvm-service.existed' ]]; then
+    cp -a '$HOST_BACKUP_DIR/homelab-lvm-collector.service' \
+        /etc/systemd/system/homelab-lvm-collector.service
+else
+    rm -f /etc/systemd/system/homelab-lvm-collector.service
+fi
+
+if [[ -f '$HOST_BACKUP_DIR/lvm-timer.existed' ]]; then
+    cp -a '$HOST_BACKUP_DIR/homelab-lvm-collector.timer' \
+        /etc/systemd/system/homelab-lvm-collector.timer
+else
+    rm -f /etc/systemd/system/homelab-lvm-collector.timer
+fi
+
+if [[ -f '$HOST_BACKUP_DIR/lvm-prom.existed' ]]; then
+    cp -a '$HOST_BACKUP_DIR/homelab_lvm.prom' \
+        /var/lib/prometheus/node-exporter/homelab_lvm.prom
+else
+    rm -f /var/lib/prometheus/node-exporter/homelab_lvm.prom
+fi
+
+systemctl daemon-reload
+
+if [[ -f '$HOST_BACKUP_DIR/lvm-timer.enabled' ]]; then
+    systemctl enable --now homelab-lvm-collector.timer || true
+fi
+
+systemctl reset-failed homelab-lvm-collector.service \
+    2>/dev/null || true
+"
+### ---------------------------------------------------------
     remote "
     if [[ -f '$BACKUP_DIR/prometheus.yml' ]]; then
         cp -a '$BACKUP_DIR/prometheus.yml' \
@@ -168,6 +204,9 @@ required_files=(
     "$GRAFANA_DATASOURCE"
     "$GRAFANA_PROVIDER"
     "$NODE_EXPORTER_ENV"
+    "$LVM_COLLECTOR"
+    "$LVM_SERVICE"
+    "$LVM_TIMER"
 )
 
 info "Running pre-deployment validation"
@@ -246,6 +285,18 @@ push_file "$GRAFANA_PROVIDER" \
 push_host_file \
     "$NODE_EXPORTER_ENV" \
     "$HOST_REMOTE_TMP/prometheus-node-exporter"
+    
+push_host_file \
+    "$LVM_COLLECTOR" \
+    "$HOST_REMOTE_TMP/homelab-lvm-collector"
+
+push_host_file \
+    "$LVM_SERVICE" \
+    "$HOST_REMOTE_TMP/homelab-lvm-collector.service"
+
+push_host_file \
+    "$LVM_TIMER" \
+    "$HOST_REMOTE_TMP/homelab-lvm-collector.timer"
 
 for dashboard in "$GRAFANA_DASHBOARDS"/*.json; do
     [[ -e "$dashboard" ]] || continue
@@ -308,9 +359,33 @@ ok "Backup created at $BACKUP_DIR"
 
 
 ssh "$PVE_HOST" "
-cp -a /etc/default/prometheus-node-exporter \
-    '$HOST_BACKUP_DIR/prometheus-node-exporter' \
-    2>/dev/null || true
+if [[ -e /usr/local/sbin/homelab-lvm-collector ]]; then
+    touch '$HOST_BACKUP_DIR/lvm-collector.existed'
+    cp -a /usr/local/sbin/homelab-lvm-collector \
+        '$HOST_BACKUP_DIR/homelab-lvm-collector'
+fi
+
+if [[ -e /etc/systemd/system/homelab-lvm-collector.service ]]; then
+    touch '$HOST_BACKUP_DIR/lvm-service.existed'
+    cp -a /etc/systemd/system/homelab-lvm-collector.service \
+        '$HOST_BACKUP_DIR/homelab-lvm-collector.service'
+fi
+
+if [[ -e /etc/systemd/system/homelab-lvm-collector.timer ]]; then
+    touch '$HOST_BACKUP_DIR/lvm-timer.existed'
+    cp -a /etc/systemd/system/homelab-lvm-collector.timer \
+        '$HOST_BACKUP_DIR/homelab-lvm-collector.timer'
+fi
+
+if [[ -e /var/lib/prometheus/node-exporter/homelab_lvm.prom ]]; then
+    touch '$HOST_BACKUP_DIR/lvm-prom.existed'
+    cp -a /var/lib/prometheus/node-exporter/homelab_lvm.prom \
+        '$HOST_BACKUP_DIR/homelab_lvm.prom'
+fi
+
+if systemctl is-enabled --quiet homelab-lvm-collector.timer 2>/dev/null; then
+    touch '$HOST_BACKUP_DIR/lvm-timer.enabled'
+fi
 "
 
 DEPLOY_STARTED=true
@@ -327,6 +402,29 @@ systemctl restart prometheus-node-exporter
 
 ok "Node Exporter configuration deployed"
 
+info "Deploying LVM collector"
+
+ssh "$PVE_HOST" "
+install -o root -g root -m 0755 \
+    '$HOST_REMOTE_TMP/homelab-lvm-collector' \
+    /usr/local/sbin/homelab-lvm-collector
+
+install -o root -g root -m 0644 \
+    '$HOST_REMOTE_TMP/homelab-lvm-collector.service' \
+    /etc/systemd/system/homelab-lvm-collector.service
+
+install -o root -g root -m 0644 \
+    '$HOST_REMOTE_TMP/homelab-lvm-collector.timer' \
+    /etc/systemd/system/homelab-lvm-collector.timer
+
+systemctl daemon-reload
+
+systemctl enable --now homelab-lvm-collector.timer
+
+systemctl start homelab-lvm-collector.service
+"
+
+ok "LVM collector deployed"
 
 info "Deploying Prometheus"
 
@@ -414,6 +512,29 @@ done
     || fail "Node Exporter did not expose hdd-backup filesystem metrics"
 
 ok "hdd-backup filesystem metric exposed"
+
+info "Checking LVM collector"
+
+LVM_TIMER_STATUS="$(
+    ssh "$PVE_HOST" \
+        "systemctl is-active homelab-lvm-collector.timer" \
+        2>/dev/null || true
+)"
+
+[[ "$LVM_TIMER_STATUS" == "active" ]] \
+    || fail "LVM collector timer is not active"
+
+LVM_METRICS="$(
+    ssh "$PVE_HOST" \
+        "curl --fail --silent http://127.0.0.1:9100/metrics \
+        | grep '^homelab_lvm_'" \
+        2>/dev/null || true
+)"
+
+grep -q 'homelab_lvm_collector_success 1' <<< "$LVM_METRICS" \
+    || fail "LVM collector did not publish successful metrics"
+
+ok "LVM collector timer active and metrics available"
 
 info "Reloading services"
 
