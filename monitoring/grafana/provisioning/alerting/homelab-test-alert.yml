@@ -1,8 +1,8 @@
 apiVersion: 1
 groups:
     - orgId: 1
-      name: Test
-      folder: Homelab
+      name: Synthetic alerting test
+      folder: Homelab - Tests
       interval: 1m
       rules:
         - uid: dfx1l9ddps3y8f

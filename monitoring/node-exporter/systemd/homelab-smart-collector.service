@@ -1,0 +1,17 @@
+[Unit]
+Description=Homelab SMART metrics collector
+After=smartmontools.service
+ConditionPathIsDirectory=/var/lib/prometheus/node-exporter
+ConditionPathExists=/usr/sbin/smartctl
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/homelab-smart-collector
+
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/prometheus/node-exporter
+PrivateTmp=true

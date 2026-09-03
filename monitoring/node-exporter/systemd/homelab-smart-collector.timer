@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect SMART metrics every five minutes
+
+[Timer]
+OnBootSec=1m
+OnUnitActiveSec=5m
+AccuracySec=30s
+Unit=homelab-smart-collector.service
+
+[Install]
+WantedBy=timers.target
