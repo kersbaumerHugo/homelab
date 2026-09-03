@@ -276,6 +276,96 @@ prom_metric \
     'time() - homelab_lvm_collector_last_run_unixtime{instance="192.168.10.10:9100"} < 180' \
     "LVM collector metric fresh"
 
+section "Backup health"
+
+BACKUP_JOB="$(
+    ssh "$PVE_HOST" \
+        "pvesh get /cluster/backup/mon01-daily --output-format json" \
+        2>/dev/null || true
+)"
+
+if [[ -n "$BACKUP_JOB" ]]; then
+    ok "mon01 daily backup job exists"
+else
+    bad "mon01 daily backup job missing"
+fi
+
+BACKUP_ENABLED="$(
+    ssh "$PVE_HOST" \
+        "pvesh get /cluster/backup/mon01-daily --output-format json" \
+        2>/dev/null |
+    python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+print(data.get("enabled", 0))
+' 2>/dev/null || true
+)"
+
+if [[ "$BACKUP_ENABLED" == "1" ]]; then
+    ok "mon01 daily backup job enabled"
+else
+    bad "mon01 daily backup job disabled"
+fi
+
+LATEST_BACKUP="$(
+    ssh "$PVE_HOST" \
+        "find /mnt/pve/hdd-backup/dump \
+          -maxdepth 1 \
+          -type f \
+          -name 'vzdump-lxc-100-*.tar.zst' \
+          -printf '%T@ %p\n' \
+          | sort -nr \
+          | head -1" \
+        2>/dev/null || true
+)"
+
+if [[ -z "$LATEST_BACKUP" ]]; then
+    bad "No mon01 backup artifact found"
+else
+    BACKUP_TIMESTAMP="${LATEST_BACKUP%% *}"
+    BACKUP_PATH="${LATEST_BACKUP#* }"
+
+    NOW="$(date +%s)"
+    BACKUP_AGE="$(
+        python3 -c \
+            "print(int($NOW - float('$BACKUP_TIMESTAMP')))"
+    )"
+
+    if (( BACKUP_AGE < 93600 )); then
+        ok "Latest mon01 backup is fresh (<26h)"
+    else
+        bad "Latest mon01 backup is older than 26h"
+    fi
+
+    if ssh "$PVE_HOST" "test -r '$BACKUP_PATH'"; then
+        ok "Latest mon01 backup artifact readable"
+    else
+        bad "Latest mon01 backup artifact unreadable"
+    fi
+fi
+
+section "Boot policy"
+
+MON01_BOOT="$(
+    ssh "$PVE_HOST" \
+      "pct config $CT_ID | grep -E '^(onboot|startup):'" \
+      2>/dev/null || true
+)"
+
+if grep -q '^onboot: 1$' <<< "$MON01_BOOT"; then
+    ok "mon01 autostart enabled"
+else
+    bad "mon01 autostart disabled"
+fi
+
+EXPECTED_STARTUP="startup: order=10,up=30,down=60"
+
+if grep -qF "$EXPECTED_STARTUP" <<< "$MON01_BOOT"; then
+    ok "mon01 startup policy correct"
+else
+    bad "mon01 startup policy drift detected"
+    printf '%s\n' "$MON01_BOOT"
+fi
 section "Systemd health"
 
 FAILED_HOST="$(
