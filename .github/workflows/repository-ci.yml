@@ -1,0 +1,68 @@
+name: Repository CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: Repository / ShellCheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+      - name: Validate shell scripts
+        run: ./scripts/validate-monitoring.sh shell
+
+  hygiene:
+    name: Repository / Hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check repository hygiene
+        run: ./scripts/validate-docs.sh hygiene
+
+  gate:
+    name: Repository / Gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - shellcheck
+      - hygiene
+    steps:
+      - name: Summarize repository checks
+        env:
+          SHELLCHECK_RESULT: ${{ needs.shellcheck.result }}
+          HYGIENE_RESULT: ${{ needs.hygiene.result }}
+        run: |
+          {
+            echo "## Repository CI summary"
+            echo
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| ShellCheck | $SHELLCHECK_RESULT |"
+            echo "| Hygiene | $HYGIENE_RESULT |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for result in             "$SHELLCHECK_RESULT"             "$HYGIENE_RESULT"; do
+            [[ "$result" == "success" ]] || exit 1
+          done
+
+          echo "All repository CI checks passed."

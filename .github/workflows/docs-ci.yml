@@ -2,37 +2,76 @@ name: Documentation CI
 
 on:
   pull_request:
-    paths:
-      - "README.md"
-      - "CONTRIBUTING.md"
-      - "docs/**"
-      - "inventory/**"
-      - "scripts/validate-docs.sh"
-      - ".github/workflows/docs-ci.yml"
   push:
     branches:
       - main
-    paths:
-      - "README.md"
-      - "CONTRIBUTING.md"
-      - "docs/**"
-      - "inventory/**"
-      - "scripts/validate-docs.sh"
-      - ".github/workflows/docs-ci.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: docs-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  validate-docs:
-    name: Validate documentation
+  structure:
+    name: Docs / Structure
     runs-on: ubuntu-latest
-
+    timeout-minutes: 5
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+      - name: Validate required documentation
+        run: ./scripts/validate-docs.sh structure
 
-      - name: Validate documentation
+  links:
+    name: Docs / Links
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate relative links
+        run: ./scripts/validate-docs.sh links
+
+  adr:
+    name: Docs / ADR consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate ADRs
+        run: ./scripts/validate-docs.sh adr
+
+  gate:
+    name: Docs / Gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - structure
+      - links
+      - adr
+    steps:
+      - name: Summarize documentation checks
+        env:
+          STRUCTURE_RESULT: ${{ needs.structure.result }}
+          LINKS_RESULT: ${{ needs.links.result }}
+          ADR_RESULT: ${{ needs.adr.result }}
         run: |
-          chmod +x scripts/validate-docs.sh
-          ./scripts/validate-docs.sh
+          {
+            echo "## Documentation CI summary"
+            echo
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Structure | $STRUCTURE_RESULT |"
+            echo "| Links | $LINKS_RESULT |"
+            echo "| ADR consistency | $ADR_RESULT |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for result in             "$STRUCTURE_RESULT"             "$LINKS_RESULT"             "$ADR_RESULT"; do
+            [[ "$result" == "success" ]] || exit 1
+          done
+
+          echo "All documentation CI checks passed."
