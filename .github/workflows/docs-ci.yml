@@ -1,0 +1,38 @@
+name: Documentation CI
+
+on:
+  pull_request:
+    paths:
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "docs/**"
+      - "inventory/**"
+      - "scripts/validate-docs.sh"
+      - ".github/workflows/docs-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "docs/**"
+      - "inventory/**"
+      - "scripts/validate-docs.sh"
+      - ".github/workflows/docs-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-docs:
+    name: Validate documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate documentation
+        run: |
+          chmod +x scripts/validate-docs.sh
+          ./scripts/validate-docs.sh
