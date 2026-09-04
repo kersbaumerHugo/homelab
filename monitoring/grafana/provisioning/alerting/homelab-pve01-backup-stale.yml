@@ -1,0 +1,73 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: pve01 - mon01 backup stale
+    folder: Homelab - Storage
+    interval: 1m
+
+    rules:
+      - uid: pve01bkstale
+        title: pve01 - mon01 backup stale
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                time() - homelab_backup_last_success_unixtime{instance="192.168.10.10:9100",backup_job="mon01-daily",vmid="100"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 93600
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: Alerting
+        execErrState: Error
+        for: 10m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: mon01 backup is older than 26 hours
+          description: The latest mon01 backup artifact has exceeded the 26 hour freshness objective.
+
+        labels:
+          category: backup
+          host: pve01
+          severity: critical
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab

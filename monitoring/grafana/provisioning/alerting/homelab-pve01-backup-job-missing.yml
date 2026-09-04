@@ -1,0 +1,73 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: pve01 - mon01 backup job missing
+    folder: Homelab - Storage
+    interval: 1m
+
+    rules:
+      - uid: pve01bkjobmissing
+        title: pve01 - mon01 backup job missing
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                homelab_backup_job_exists{instance="192.168.10.10:9100",backup_job="mon01-daily",vmid="100"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: mon01 backup job is missing
+          description: The mon01-daily backup job is no longer present on pve01.
+
+        labels:
+          category: backup
+          host: pve01
+          severity: critical
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab

@@ -1,0 +1,16 @@
+[Unit]
+Description=Homelab backup metrics collector
+After=pve-cluster.service
+ConditionPathIsDirectory=/var/lib/prometheus/node-exporter
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/homelab-backup-collector
+
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/prometheus/node-exporter
+PrivateTmp=true

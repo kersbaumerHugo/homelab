@@ -30,7 +30,11 @@ GRAFANA_ALERTING="$REPO_ROOT/monitoring/grafana/provisioning/alerting"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 REMOTE_TMP="/tmp/homelab-deploy-$TIMESTAMP"
+
 BACKUP_DIR="/root/homelab-config-backups/$TIMESTAMP"
+BACKUP_COLLECTOR="$REPO_ROOT/monitoring/node-exporter/backup-collector.py"
+BACKUP_SERVICE="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-backup-collector.service"
+BACKUP_TIMER="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-backup-collector.timer"
 
 HOST_REMOTE_TMP="/tmp/homelab-host-deploy-$TIMESTAMP"
 HOST_BACKUP_DIR="/root/homelab-host-config-backups/$TIMESTAMP"
@@ -103,6 +107,48 @@ systemctl reset-failed homelab-lvm-collector.service \
     2>/dev/null || true
 "
 ### ---------------------------------------------------------
+
+ssh "$PVE_HOST" "
+systemctl disable --now homelab-backup-collector.timer \
+    2>/dev/null || true
+
+if [[ -f '$HOST_BACKUP_DIR/backup-collector.existed' ]]; then
+    cp -a '$HOST_BACKUP_DIR/homelab-backup-collector' \
+        /usr/local/sbin/homelab-backup-collector
+else
+    rm -f /usr/local/sbin/homelab-backup-collector
+fi
+
+if [[ -f '$HOST_BACKUP_DIR/backup-service.existed' ]]; then
+    cp -a '$HOST_BACKUP_DIR/homelab-backup-collector.service' \
+        /etc/systemd/system/homelab-backup-collector.service
+else
+    rm -f /etc/systemd/system/homelab-backup-collector.service
+fi
+
+if [[ -f '$HOST_BACKUP_DIR/backup-timer.existed' ]]; then
+    cp -a '$HOST_BACKUP_DIR/homelab-backup-collector.timer' \
+        /etc/systemd/system/homelab-backup-collector.timer
+else
+    rm -f /etc/systemd/system/homelab-backup-collector.timer
+fi
+
+if [[ -f '$HOST_BACKUP_DIR/backup-prom.existed' ]]; then
+    cp -a '$HOST_BACKUP_DIR/homelab_backup.prom' \
+        /var/lib/prometheus/node-exporter/homelab_backup.prom
+else
+    rm -f /var/lib/prometheus/node-exporter/homelab_backup.prom
+fi
+
+systemctl daemon-reload
+
+if [[ -f '$HOST_BACKUP_DIR/backup-timer.enabled' ]]; then
+    systemctl enable --now homelab-backup-collector.timer || true
+fi
+
+systemctl reset-failed homelab-backup-collector.service \
+    2>/dev/null || true
+"
     remote "
     if [[ -f '$BACKUP_DIR/prometheus.yml' ]]; then
         cp -a '$BACKUP_DIR/prometheus.yml' \
@@ -135,6 +181,8 @@ systemctl reset-failed homelab-lvm-collector.service \
         cp -a '$BACKUP_DIR/grafana-alerting' \
             /etc/grafana/provisioning/alerting
     fi
+    
+    
 
     systemctl daemon-reload
     systemctl restart prometheus || true
@@ -215,6 +263,9 @@ required_files=(
     "$SMART_COLLECTOR"
     "$SMART_SERVICE"
     "$SMART_TIMER"
+    "$BACKUP_COLLECTOR"
+    "$BACKUP_SERVICE"
+    "$BACKUP_TIMER"
 )
 
 info "Running pre-deployment validation"
@@ -320,6 +371,19 @@ push_host_file \
 push_host_file \
     "$SMART_TIMER" \
     "$HOST_REMOTE_TMP/homelab-smart-collector.timer"
+    
+# Backup collector
+push_host_file \
+    "$BACKUP_COLLECTOR" \
+    "$HOST_REMOTE_TMP/homelab-backup-collector"
+
+push_host_file \
+    "$BACKUP_SERVICE" \
+    "$HOST_REMOTE_TMP/homelab-backup-collector.service"
+
+push_host_file \
+    "$BACKUP_TIMER" \
+    "$HOST_REMOTE_TMP/homelab-backup-collector.timer"
 
 
 for dashboard in "$GRAFANA_DASHBOARDS"/*.json; do
@@ -443,6 +507,35 @@ if systemctl is-enabled --quiet homelab-smart-collector.timer 2>/dev/null; then
 fi
 "
 
+ssh "$PVE_HOST" "
+if [[ -e /usr/local/sbin/homelab-backup-collector ]]; then
+    touch '$HOST_BACKUP_DIR/backup-collector.existed'
+    cp -a /usr/local/sbin/homelab-backup-collector \
+        '$HOST_BACKUP_DIR/homelab-backup-collector'
+fi
+
+if [[ -e /etc/systemd/system/homelab-backup-collector.service ]]; then
+    touch '$HOST_BACKUP_DIR/backup-service.existed'
+    cp -a /etc/systemd/system/homelab-backup-collector.service \
+        '$HOST_BACKUP_DIR/homelab-backup-collector.service'
+fi
+
+if [[ -e /etc/systemd/system/homelab-backup-collector.timer ]]; then
+    touch '$HOST_BACKUP_DIR/backup-timer.existed'
+    cp -a /etc/systemd/system/homelab-backup-collector.timer \
+        '$HOST_BACKUP_DIR/homelab-backup-collector.timer'
+fi
+
+if [[ -e /var/lib/prometheus/node-exporter/homelab_backup.prom ]]; then
+    touch '$HOST_BACKUP_DIR/backup-prom.existed'
+    cp -a /var/lib/prometheus/node-exporter/homelab_backup.prom \
+        '$HOST_BACKUP_DIR/homelab_backup.prom'
+fi
+
+if systemctl is-enabled --quiet homelab-backup-collector.timer 2>/dev/null; then
+    touch '$HOST_BACKUP_DIR/backup-timer.enabled'
+fi
+"
 
 DEPLOY_STARTED=true
 
@@ -481,6 +574,42 @@ systemctl start homelab-lvm-collector.service
 "
 
 ok "LVM collector deployed"
+
+info "Deploying backup collector"
+
+ssh "$PVE_HOST" "
+install -m 0755 \
+    '$HOST_REMOTE_TMP/homelab-backup-collector' \
+    /usr/local/sbin/homelab-backup-collector
+
+install -m 0644 \
+    '$HOST_REMOTE_TMP/homelab-backup-collector.service' \
+    /etc/systemd/system/homelab-backup-collector.service
+
+install -m 0644 \
+    '$HOST_REMOTE_TMP/homelab-backup-collector.timer' \
+    /etc/systemd/system/homelab-backup-collector.timer
+
+systemctl daemon-reload
+
+systemd-analyze verify \
+    /etc/systemd/system/homelab-backup-collector.service \
+    /etc/systemd/system/homelab-backup-collector.timer
+
+systemctl enable --now homelab-backup-collector.timer
+systemctl start homelab-backup-collector.service
+
+systemctl is-active --quiet homelab-backup-collector.timer
+
+test -s \
+    /var/lib/prometheus/node-exporter/homelab_backup.prom
+
+grep -q \
+    '^homelab_backup_collector_success 1$' \
+    /var/lib/prometheus/node-exporter/homelab_backup.prom
+"
+
+ok "Backup collector deployed"
 
 info "Deploying SMART collector"
 

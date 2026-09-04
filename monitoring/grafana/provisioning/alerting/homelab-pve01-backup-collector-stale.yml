@@ -1,0 +1,73 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: pve01 - Backup collector metrics stale
+    folder: Homelab - Monitoring
+    interval: 1m
+
+    rules:
+      - uid: pve01bkcolstale
+        title: pve01 - Backup collector metrics stale
+        condition: C
+
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: |
+                time() - homelab_backup_collector_last_run_unixtime{instance="192.168.10.10:9100"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+
+          - refId: C
+            queryType: expression
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 900
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+
+        noDataState: Alerting
+        execErrState: Error
+        for: 2m
+        keepFiringFor: 1m
+
+        annotations:
+          summary: Backup collector metrics are stale on pve01
+          description: The backup collector has not produced fresh metrics for more than 15 minutes.
+
+        labels:
+          category: backup
+          host: pve01
+          severity: critical
+
+        isPaused: false
+
+        notification_settings:
+          receiver: ntfy-homelab
