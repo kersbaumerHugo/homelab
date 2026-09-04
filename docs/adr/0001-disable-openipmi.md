@@ -1,4 +1,4 @@
-# ADR 0005 - Disable OpenIPMI on pve01
+# ADR 0001 - Disable OpenIPMI on pve01
 
 ## Status
 Accepted
