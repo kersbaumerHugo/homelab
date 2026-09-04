@@ -20,6 +20,8 @@ GRAFANA_ALERTING="$REPO_ROOT/monitoring/grafana/provisioning/alerting"
 
 NTFY_CONFIG="$REPO_ROOT/monitoring/ntfy/server.yml"
 
+BACKUP_JOB_CONFIG="$REPO_ROOT/proxmox/pve01/backup-jobs/mon01-daily.yml"
+
 FAILURES=0
 
 ok() {
@@ -290,6 +292,124 @@ else
     bad "mon01 daily backup job missing"
 fi
 
+echo
+echo "Checking backup policy drift"
+
+EXPECTED_BACKUP="$(
+    python3 - "$BACKUP_JOB_CONFIG" <<'PY'
+import sys
+import yaml
+
+with open(sys.argv[1], encoding="utf-8") as f:
+    d = yaml.safe_load(f)
+
+print("id=" + str(d["id"]))
+print("vmid=" + str(d["target"]["vmid"]))
+print("storage=" + str(d["backup"]["storage"]))
+print("mode=" + str(d["backup"]["mode"]))
+print("compress=" + str(d["backup"]["compression"]))
+print("schedule=" + str(d["backup"]["schedule"]))
+print("enabled=1")
+
+print(
+    "prune="
+    + "keep-daily=" + str(d["retention"]["keep_daily"])
+    + ",keep-weekly=" + str(d["retention"]["keep_weekly"])
+    + ",keep-monthly=" + str(d["retention"]["keep_monthly"])
+)
+PY
+)"
+
+ACTUAL_BACKUP="$(
+    printf '%s' "$BACKUP_JOB" |
+    python3 -c '
+import json
+import sys
+
+d = json.load(sys.stdin)
+
+raw_prune = d.get("prune-backups", {})
+parts = {}
+
+if isinstance(raw_prune, dict):
+    parts = {
+        str(key): str(value)
+        for key, value in raw_prune.items()
+    }
+
+elif isinstance(raw_prune, str):
+    raw_prune = raw_prune.strip()
+
+    # Some Proxmox versions/outputs may encode it
+    # as a JSON object inside a string.
+    if raw_prune.startswith("{"):
+        try:
+            decoded = json.loads(raw_prune)
+
+            if isinstance(decoded, dict):
+                parts = {
+                    str(key): str(value)
+                    for key, value in decoded.items()
+                }
+        except json.JSONDecodeError:
+            pass
+
+    # Or as key=value,key=value
+    if not parts:
+        for item in raw_prune.split(","):
+            item = item.strip()
+
+            if "=" in item:
+                key, value = item.split("=", 1)
+                parts[key] = value
+
+prune = ",".join(
+    key + "=" + parts[key]
+    for key in (
+        "keep-daily",
+        "keep-weekly",
+        "keep-monthly",
+    )
+    if key in parts
+)
+
+enabled_raw = d.get("enabled", 0)
+
+if isinstance(enabled_raw, str):
+    enabled = 1 if enabled_raw.lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ) else 0
+else:
+    enabled = int(bool(enabled_raw))
+
+print("id=" + str(d.get("id", "mon01-daily")))
+print("vmid=" + str(d.get("vmid", "")))
+print("storage=" + str(d.get("storage", "")))
+print("mode=" + str(d.get("mode", "")))
+print("compress=" + str(d.get("compress", "")))
+print("schedule=" + str(d.get("schedule", "")))
+print("enabled=" + str(enabled))
+print("prune=" + prune)
+'
+)"
+
+if [[ "$EXPECTED_BACKUP" == "$ACTUAL_BACKUP" ]]; then
+    ok "mon01 backup policy synchronized"
+else
+    bad "mon01 backup policy drift detected"
+
+    echo
+    echo "--- Expected ---"
+    printf '%s\n' "$EXPECTED_BACKUP"
+
+    echo
+    echo "--- Runtime ---"
+    printf '%s\n' "$ACTUAL_BACKUP"
+fi
+
 BACKUP_ENABLED="$(
     ssh "$PVE_HOST" \
         "pvesh get /cluster/backup/mon01-daily --output-format json" \
@@ -343,6 +463,7 @@ else
         bad "Latest mon01 backup artifact unreadable"
     fi
 fi
+
 
 section "Boot policy"
 
