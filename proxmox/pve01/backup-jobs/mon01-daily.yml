@@ -1,0 +1,17 @@
+id: mon01-daily
+
+target:
+  type: lxc
+  vmid: 100
+  name: mon01
+
+backup:
+  storage: hdd-backup
+  mode: snapshot
+  compression: zstd
+  schedule: "03:00"
+
+retention:
+  keep_daily: 7
+  keep_weekly: 4
+  keep_monthly: 3
