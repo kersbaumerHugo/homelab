@@ -21,6 +21,9 @@ GRAFANA_ALERTING="$REPO_ROOT/monitoring/grafana/provisioning/alerting"
 NTFY_CONFIG="$REPO_ROOT/monitoring/ntfy/server.yml"
 
 BACKUP_JOB_CONFIG="$REPO_ROOT/proxmox/pve01/backup-jobs/mon01-daily.yml"
+BACKUP_COLLECTOR="$REPO_ROOT/monitoring/node-exporter/backup-collector.py"
+BACKUP_SERVICE="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-backup-collector.service"
+BACKUP_TIMER="$REPO_ROOT/monitoring/node-exporter/systemd/homelab-backup-collector.timer"
 
 FAILURES=0
 
@@ -50,6 +53,14 @@ host_service() {
     else
         bad "$service inactive on pve01"
     fi
+    
+    if [[ "$(ssh "$PVE_HOST" \
+    "systemctl is-active homelab-backup-collector.timer" \
+    2>/dev/null)" == "active" ]]; then
+        ok "Backup collector timer active"
+    else
+        bad "Backup collector timer inactive"
+fi
 }
 
 ct_service() {
@@ -285,6 +296,34 @@ BACKUP_JOB="$(
         "pvesh get /cluster/backup/mon01-daily --output-format json" \
         2>/dev/null || true
 )"
+
+prom_metric \
+    'homelab_backup_collector_success{instance="192.168.10.10:9100"} == 1' \
+    "Backup collector healthy"
+
+prom_metric \
+    'time() - homelab_backup_collector_last_run_unixtime{instance="192.168.10.10:9100"} < 900' \
+    "Backup collector metric fresh"
+
+prom_metric \
+    'homelab_backup_job_exists{instance="192.168.10.10:9100",backup_job="mon01-daily",vmid="100"} == 1' \
+    "mon01 backup job metric healthy"
+
+prom_metric \
+    'homelab_backup_job_enabled{instance="192.168.10.10:9100",backup_job="mon01-daily",vmid="100"} == 1' \
+    "mon01 backup job enabled metric healthy"
+
+prom_metric \
+    'homelab_backup_artifact_present{instance="192.168.10.10:9100",backup_job="mon01-daily",vmid="100"} == 1' \
+    "mon01 backup artifact metric healthy"
+
+prom_metric \
+    'time() - homelab_backup_last_success_unixtime{instance="192.168.10.10:9100",backup_job="mon01-daily",vmid="100"} < 93600' \
+    "mon01 backup metric fresh (<26h)"
+
+prom_metric \
+    'homelab_backup_last_size_bytes{instance="192.168.10.10:9100",backup_job="mon01-daily",vmid="100"} > 0' \
+    "mon01 backup size metric valid"
 
 if [[ -n "$BACKUP_JOB" ]]; then
     ok "mon01 daily backup job exists"
@@ -632,6 +671,21 @@ verify_host_sync \
     "$NODE_EXPORTER_ENV" \
     "/etc/default/prometheus-node-exporter" \
     "Node Exporter configuration"
+
+verify_host_sync \
+    "$BACKUP_COLLECTOR" \
+    "/usr/local/sbin/homelab-backup-collector" \
+    "Backup collector"
+
+verify_host_sync \
+    "$BACKUP_SERVICE" \
+    "/etc/systemd/system/homelab-backup-collector.service" \
+    "Backup collector service"
+
+verify_host_sync \
+    "$BACKUP_TIMER" \
+    "/etc/systemd/system/homelab-backup-collector.timer" \
+    "Backup collector timer"
 
 while IFS= read -r -d '' dashboard; do
     filename="$(basename "$dashboard")"
