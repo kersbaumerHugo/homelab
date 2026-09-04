@@ -5,58 +5,87 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-jobs:
-  validate:
-    runs-on: ubuntu-latest
+concurrency:
+  group: monitoring-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
+  yaml:
+    name: Monitoring / YAML
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install validation tools
+      - name: Install YAML validator
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            shellcheck \
-            jq \
-            python3-yaml \
-            prometheus
+          sudo apt-get install -y python3-yaml
+      - name: Validate YAML
+        run: ./scripts/validate-monitoring.sh yaml
 
-      - name: Validate monitoring repository
-        run: |
-          chmod +x scripts/validate-monitoring.sh
-          ./scripts/validate-monitoring.sh
-  grafana-integration:
-    name: Grafana integration
+  collectors:
+    name: Monitoring / Collectors
     runs-on: ubuntu-latest
-    needs: validate
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate collectors
+        run: ./scripts/validate-monitoring.sh collectors
 
+  prometheus:
+    name: Monitoring / Prometheus
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Prometheus tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y prometheus
+      - name: Validate Prometheus
+        run: ./scripts/validate-monitoring.sh prometheus
+
+  grafana_static:
+    name: Monitoring / Grafana static
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Grafana validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq python3-yaml
+      - name: Validate Grafana configuration
+        run: ./scripts/validate-monitoring.sh grafana
+
+  grafana_integration:
+    name: Monitoring / Grafana integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Start Grafana with repository provisioning
         run: |
-          docker run -d \
-            --name grafana-test \
-            -p 3000:3000 \
-            -v "${{ github.workspace }}/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro" \
-            -v "${{ github.workspace }}/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro" \
-            grafana/grafana:13.2.0
+          docker run -d             --name grafana-test             -p 3000:3000             -v "${{ github.workspace }}/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro"             -v "${{ github.workspace }}/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro"             grafana/grafana:13.2.0
 
       - name: Wait for Grafana
         run: |
           for attempt in $(seq 1 30); do
-            if curl --fail --silent \
-              http://127.0.0.1:3000/api/health >/dev/null; then
+            if curl --fail --silent               http://127.0.0.1:3000/api/health >/dev/null; then
               echo "Grafana is healthy"
               exit 0
             fi
-
             echo "Waiting for Grafana... ($attempt/30)"
             sleep 2
           done
@@ -67,12 +96,11 @@ jobs:
 
       - name: Verify Grafana health
         run: |
-          HEALTH="$(curl --fail --silent \
-            http://127.0.0.1:3000/api/health)"
-
+          HEALTH="$(
+            curl --fail --silent               http://127.0.0.1:3000/api/health
+          )"
           echo "$HEALTH"
-
-          echo "$HEALTH" | grep -q '"database": "ok"\|"database":"ok"'
+          echo "$HEALTH"             | grep -q '"database": "ok"\|"database":"ok"'
 
       - name: Show Grafana logs on failure
         if: failure()
@@ -81,3 +109,40 @@ jobs:
       - name: Stop Grafana
         if: always()
         run: docker rm -f grafana-test || true
+
+  gate:
+    name: Monitoring / Gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - yaml
+      - collectors
+      - prometheus
+      - grafana_static
+      - grafana_integration
+    steps:
+      - name: Summarize monitoring checks
+        env:
+          YAML_RESULT: ${{ needs.yaml.result }}
+          COLLECTORS_RESULT: ${{ needs.collectors.result }}
+          PROMETHEUS_RESULT: ${{ needs.prometheus.result }}
+          GRAFANA_STATIC_RESULT: ${{ needs.grafana_static.result }}
+          GRAFANA_INTEGRATION_RESULT: ${{ needs.grafana_integration.result }}
+        run: |
+          {
+            echo "## Monitoring CI summary"
+            echo
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| YAML | $YAML_RESULT |"
+            echo "| Collectors | $COLLECTORS_RESULT |"
+            echo "| Prometheus | $PROMETHEUS_RESULT |"
+            echo "| Grafana static | $GRAFANA_STATIC_RESULT |"
+            echo "| Grafana integration | $GRAFANA_INTEGRATION_RESULT |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for result in             "$YAML_RESULT"             "$COLLECTORS_RESULT"             "$PROMETHEUS_RESULT"             "$GRAFANA_STATIC_RESULT"             "$GRAFANA_INTEGRATION_RESULT"; do
+            [[ "$result" == "success" ]] || exit 1
+          done
+
+          echo "All monitoring CI checks passed."

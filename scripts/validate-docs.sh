@@ -4,17 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-failures=0
-
-ok() {
-  printf 'OK   %s\n' "$1"
-}
-
-fail() {
-  printf 'FAIL %s\n' "$1" >&2
-  failures=$((failures + 1))
-}
-
 required_files=(
   "README.md"
   "CONTRIBUTING.md"
@@ -54,17 +43,66 @@ required_files=(
   "inventory/mon01.md"
 )
 
-printf '== Required documentation files ==\n'
-for file in "${required_files[@]}"; do
-  if [[ -s "$file" ]]; then
-    ok "$file"
-  else
-    fail "$file is missing or empty"
-  fi
-done
+usage() {
+  cat <<'EOF'
+Usage:
+  ./scripts/validate-docs.sh [check ...]
 
-printf '\n== Markdown relative links ==\n'
-python3 - <<'PY' || exit_code=$?
+Checks:
+  structure  Required files and non-empty Markdown files
+  links      Relative Markdown link validation
+  adr        ADR filename/heading consistency
+  hygiene    Accidental Python bytecode/cache detection
+  all        Run all checks (default)
+
+Examples:
+  ./scripts/validate-docs.sh
+  ./scripts/validate-docs.sh links
+  ./scripts/validate-docs.sh structure adr
+EOF
+}
+
+check_structure() {
+  local failures=0
+
+  echo "==> Checking required documentation files"
+
+  for file in "${required_files[@]}"; do
+    if [[ -s "$file" ]]; then
+      printf 'OK   %s\n' "$file"
+    else
+      printf 'FAIL %s is missing or empty\n' "$file" >&2
+      failures=$((failures + 1))
+    fi
+  done
+
+  echo "==> Checking Markdown files are non-empty"
+
+  while IFS= read -r file; do
+    if [[ ! -s "$file" ]]; then
+      printf 'FAIL %s is empty\n' "$file" >&2
+      failures=$((failures + 1))
+    fi
+  done < <(
+    find README.md CONTRIBUTING.md docs inventory \
+      -type f \
+      -name '*.md' \
+      -print 2>/dev/null \
+    | sort
+  )
+
+  if (( failures > 0 )); then
+    echo "Documentation structure validation failed with $failures issue(s)." >&2
+    return 1
+  fi
+
+  echo "PASS: documentation structure"
+}
+
+check_links() {
+  echo "==> Checking Markdown relative links"
+
+  python3 - <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -79,22 +117,30 @@ errors = []
 
 for file in files:
     text = file.read_text(encoding="utf-8")
+
     for target in pattern.findall(text):
         target = target.strip()
+
         if not target:
             continue
+
         if target.startswith(("http://", "https://", "mailto:", "#")):
             continue
 
         path_part = target.split("#", 1)[0]
+
         if not path_part:
             continue
 
         resolved = (file.parent / path_part).resolve()
+
         try:
             resolved.relative_to(root.resolve())
         except ValueError:
-            errors.append(f"{file.relative_to(root)} -> {target} escapes repository root")
+            errors.append(
+                f"{file.relative_to(root)} -> "
+                f"{target} escapes repository root"
+            )
             continue
 
         if not resolved.exists():
@@ -102,21 +148,22 @@ for file in files:
 
 if errors:
     print("Broken relative Markdown links:")
-    for err in errors:
-        print(f"  - {err}")
+
+    for error in errors:
+        print(f"  - {error}")
+
     sys.exit(1)
 
 print("All relative Markdown links resolve.")
 PY
-link_status=${exit_code:-0}
-if (( link_status == 0 )); then
-  ok "relative Markdown links"
-else
-  fail "relative Markdown links"
-fi
 
-printf '\n== ADR naming and headings ==\n'
-python3 - <<'PY' || exit_code=$?
+  echo "PASS: documentation links"
+}
+
+check_adr() {
+  echo "==> Checking ADR naming and headings"
+
+  python3 - <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -126,6 +173,7 @@ errors = []
 
 for path in sorted(adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md")):
     match = re.match(r"^(\d{4})-", path.name)
+
     if not match:
         errors.append(f"{path}: invalid ADR filename")
         continue
@@ -142,41 +190,67 @@ for path in sorted(adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md")):
 if errors:
     for error in errors:
         print(error)
+
     sys.exit(1)
 
 print("ADR filenames and headings are consistent.")
 PY
-adr_status=${exit_code:-0}
-if (( adr_status == 0 )); then
-  ok "ADR naming and headings"
-else
-  fail "ADR naming and headings"
-fi
 
-printf '\n== Markdown files are non-empty ==\n'
-empty_files=0
-while IFS= read -r file; do
-  if [[ ! -s "$file" ]]; then
-    fail "$file is empty"
-    empty_files=$((empty_files + 1))
+  echo "PASS: ADR consistency"
+}
+
+check_hygiene() {
+  echo "==> Checking accidental Python bytecode"
+
+  if find . \
+      \( -type d -name '__pycache__' -o -type f -name '*.pyc' \) \
+      -print \
+      | grep -q .; then
+    echo "Python bytecode/cache files exist in the working tree" >&2
+    return 1
   fi
-done < <(find README.md CONTRIBUTING.md docs inventory -type f -name '*.md' -print 2>/dev/null | sort)
 
-if (( empty_files == 0 )); then
-  ok "all Markdown files are non-empty"
+  echo "PASS: repository hygiene"
+}
+
+run_check() {
+  case "$1" in
+    structure)
+      check_structure
+      ;;
+    links)
+      check_links
+      ;;
+    adr)
+      check_adr
+      ;;
+    hygiene)
+      check_hygiene
+      ;;
+    all)
+      check_structure
+      check_links
+      check_adr
+      check_hygiene
+      ;;
+    -h|--help|help)
+      usage
+      ;;
+    *)
+      echo "Unknown documentation check: $1" >&2
+      usage >&2
+      return 2
+      ;;
+  esac
+}
+
+if (($# == 0)); then
+  set -- all
 fi
 
-printf '\n== Accidental Python bytecode ==\n'
-if find . -type d -name '__pycache__' -o -type f -name '*.pyc' | grep -q .; then
-  fail "Python bytecode/cache files exist in the working tree"
-else
-  ok "no Python bytecode/cache files found"
-fi
+for check in "$@"; do
+  run_check "$check"
+done
 
-printf '\n== Documentation validation result ==\n'
-if (( failures > 0 )); then
-  printf 'Documentation validation failed with %d issue(s).\n' "$failures" >&2
-  exit 1
-fi
-
-printf 'Documentation validation successful.\n'
+echo
+echo "Documentation validation successful."
