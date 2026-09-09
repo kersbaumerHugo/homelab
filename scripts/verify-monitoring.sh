@@ -5,6 +5,8 @@ set -u -o pipefail
 
 PVE_HOST="${PVE_HOST:-pve01}"
 CT_ID="${CT_ID:-100}"
+TRACE_CT_ID="${TRACE_CT_ID:-101}"
+TRACE_IP="${TRACE_IP:-192.168.10.20}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -19,6 +21,8 @@ GRAFANA_DASHBOARDS="$REPO_ROOT/monitoring/grafana/dashboards"
 GRAFANA_ALERTING="$REPO_ROOT/monitoring/grafana/provisioning/alerting"
 
 NTFY_CONFIG="$REPO_ROOT/monitoring/ntfy/server.yml"
+TEMPO_CONFIG="$REPO_ROOT/monitoring/tempo/tempo.yml"
+GRAFANA_TEMPO_DATASOURCE="$REPO_ROOT/monitoring/grafana/provisioning/datasources/tempo.yml"
 
 BACKUP_JOB_CONFIG="$REPO_ROOT/proxmox/pve01/backup-jobs/mon01-daily.yml"
 BACKUP_COLLECTOR="$REPO_ROOT/monitoring/node-exporter/backup-collector.py"
@@ -43,6 +47,11 @@ section() {
 remote() {
     ssh "$PVE_HOST" \
         "pct exec $CT_ID -- bash -lc $(printf '%q' "$1")"
+}
+
+trace_remote() {
+    ssh "$PVE_HOST" \
+        "pct exec $TRACE_CT_ID -- bash -lc $(printf '%q' "$1")"
 }
 
 host_service() {
@@ -146,6 +155,39 @@ verify_host_sync() {
     fi
 }
 
+verify_trace_sync() {
+    local local_file="$1"
+    local remote_file="$2"
+    local description="$3"
+
+    if [[ ! -f "$local_file" ]]; then
+        bad "$description missing from repository"
+        return
+    fi
+
+    local local_sha
+    local remote_sha
+
+    local_sha="$(
+        sha256sum "$local_file" |
+            awk '{print $1}'
+    )"
+
+    remote_sha="$(
+        trace_remote "sha256sum '$remote_file'"             2>/dev/null |
+            awk '{print $1}' ||
+            true
+    )"
+
+    if [[ -z "$remote_sha" ]]; then
+        bad "$description missing from trace01"
+    elif [[ "$local_sha" == "$remote_sha" ]]; then
+        ok "$description synchronized"
+    else
+        bad "$description drift detected"
+    fi
+}
+
 check_http_health() {
     local name="$1"
     local url="$2"
@@ -195,6 +237,16 @@ else
     exit 2
 fi
 
+TRACE_STATUS="$(
+    ssh "$PVE_HOST" "pct status $TRACE_CT_ID" 2>/dev/null || true
+)"
+
+if grep -q 'status: running' <<< "$TRACE_STATUS"; then
+    ok "trace01 running"
+else
+    bad "trace01 is not running"
+fi
+
 section "Host services"
 
 host_service prometheus-node-exporter
@@ -228,6 +280,42 @@ check_http_health \
 check_http_health \
     "ntfy" \
     "http://127.0.0.1/v1/health"
+
+section "Tracing backend"
+
+if [[ "$(
+    trace_remote "systemctl is-active tempo.service" 2>/dev/null
+)" == "active" ]]; then
+    ok "Tempo active on trace01"
+else
+    bad "Tempo inactive on trace01"
+fi
+
+if remote \
+    "curl --fail --silent 'http://$TRACE_IP:3200/ready'" \
+    >/dev/null 2>&1; then
+    ok "Tempo reachable from mon01"
+else
+    bad "Tempo unreachable from mon01"
+fi
+
+if trace_remote \
+    "ss -ltn | grep -q ':4317 '" \
+    >/dev/null 2>&1; then
+    ok "Tempo OTLP gRPC listener available"
+else
+    bad "Tempo OTLP gRPC listener missing"
+fi
+
+verify_trace_sync \
+    "$TEMPO_CONFIG" \
+    "/etc/tempo/config.yml" \
+    "Tempo configuration"
+
+verify_sync \
+    "$GRAFANA_TEMPO_DATASOURCE" \
+    "/etc/grafana/provisioning/datasources/tempo.yml" \
+    "Grafana Tempo datasource"
 
 section "Prometheus"
 
