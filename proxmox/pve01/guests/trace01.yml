@@ -1,0 +1,31 @@
+vmid: 101
+name: trace01
+type: lxc
+
+os:
+  template: local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst
+  ostype: debian
+
+resources:
+  cores: 2
+  memory_mib: 4096
+  swap_mib: 512
+  rootfs:
+    storage: local-lvm
+    size_gib: 16
+
+network:
+  interface: eth0
+  bridge: vmbr0
+  ipv4: 192.168.10.20/24
+  gateway4: 192.168.10.1
+
+security:
+  unprivileged: true
+  nesting: false
+
+boot:
+  onboot: true
+  order: 20
+  startup_delay_seconds: 15
+  shutdown_timeout_seconds: 60
