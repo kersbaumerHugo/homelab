@@ -24,6 +24,7 @@ PROM_CONFIG="$REPO_ROOT/monitoring/prometheus/prometheus.yml"
 PROM_OVERRIDE="$REPO_ROOT/monitoring/prometheus/systemd/override.conf"
 
 GRAFANA_DATASOURCE="$REPO_ROOT/monitoring/grafana/provisioning/datasources/prometheus.yml"
+GRAFANA_TEMPO_DATASOURCE="$REPO_ROOT/monitoring/grafana/provisioning/datasources/tempo.yml"
 GRAFANA_PROVIDER="$REPO_ROOT/monitoring/grafana/provisioning/dashboards/homelab.yml"
 GRAFANA_DASHBOARDS="$REPO_ROOT/monitoring/grafana/dashboards"
 GRAFANA_ALERTING="$REPO_ROOT/monitoring/grafana/provisioning/alerting"
@@ -181,8 +182,15 @@ systemctl reset-failed homelab-backup-collector.service \
         cp -a '$BACKUP_DIR/grafana-alerting' \
             /etc/grafana/provisioning/alerting
     fi
-    
-    
+
+    if [[ -f '$BACKUP_DIR/grafana-tempo.yml' ]]; then
+        cp -a '$BACKUP_DIR/grafana-tempo.yml' \
+            /etc/grafana/provisioning/datasources/tempo.yml
+    else
+        rm -f /etc/grafana/provisioning/datasources/tempo.yml
+    fi
+
+
 
     systemctl daemon-reload
     systemctl restart prometheus || true
@@ -255,6 +263,7 @@ required_files=(
     "$PROM_CONFIG"
     "$PROM_OVERRIDE"
     "$GRAFANA_DATASOURCE"
+    "$GRAFANA_TEMPO_DATASOURCE"
     "$GRAFANA_PROVIDER"
     "$NODE_EXPORTER_ENV"
     "$LVM_COLLECTOR"
@@ -338,6 +347,9 @@ push_file "$PROM_OVERRIDE" \
 push_file "$GRAFANA_DATASOURCE" \
     "$REMOTE_TMP/grafana-prometheus.yml"
 
+push_file "$GRAFANA_TEMPO_DATASOURCE" \
+    "$REMOTE_TMP/grafana-tempo.yml"
+
 push_file "$GRAFANA_PROVIDER" \
     "$REMOTE_TMP/grafana-homelab.yml"
 
@@ -345,7 +357,7 @@ push_file "$GRAFANA_PROVIDER" \
 push_host_file \
     "$NODE_EXPORTER_ENV" \
     "$HOST_REMOTE_TMP/prometheus-node-exporter"
-    
+
 #LVM
 push_host_file \
     "$LVM_COLLECTOR" \
@@ -371,7 +383,7 @@ push_host_file \
 push_host_file \
     "$SMART_TIMER" \
     "$HOST_REMOTE_TMP/homelab-smart-collector.timer"
-    
+
 # Backup collector
 push_host_file \
     "$BACKUP_COLLECTOR" \
@@ -437,10 +449,13 @@ cp -a /etc/grafana/provisioning/dashboards/homelab.yml \
 
 cp -a /var/lib/grafana/dashboards \
     '$BACKUP_DIR/grafana-dashboards' 2>/dev/null || true
-    
+
 cp -a /etc/grafana/provisioning/alerting \
     '$BACKUP_DIR/grafana-alerting' 2>/dev/null || true
-    
+
+cp -a /etc/grafana/provisioning/datasources/tempo.yml \
+    '$BACKUP_DIR/grafana-tempo.yml' 2>/dev/null || true
+
 "
 
 ok "Backup created at $BACKUP_DIR"
@@ -644,6 +659,9 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
     '$REMOTE_TMP/prometheus-override.conf' \
     /etc/systemd/system/prometheus.service.d/override.conf
+
+cp -a '$REMOTE_TMP/grafana-tempo.yml' \
+    /etc/grafana/provisioning/datasources/tempo.yml
 "
 
 ok "Prometheus files deployed"
