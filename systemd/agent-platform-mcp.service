@@ -1,0 +1,27 @@
+[Unit]
+Description=Agent Platform MCP Capability Server
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=agent-platform
+Group=agent-platform
+WorkingDirectory=/opt/agent-platform/current/app
+EnvironmentFile=/etc/agent-platform/mcp.env
+ExecStartPre=/usr/bin/test -s /opt/agent-platform/current/REVISION
+ExecStart=/opt/agent-platform/current/.venv/bin/uvicorn agent_platform.api.mcp:app --host 192.168.10.30 --port 8001
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=30s
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/agent-platform
+
+[Install]
+WantedBy=multi-user.target
