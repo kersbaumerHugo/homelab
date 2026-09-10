@@ -127,7 +127,8 @@ remote pct status "$VMID" |
     grep -q 'status: running'
 
 ct test -d "$RELEASE_DIR"
-ct test -x "${RELEASE_DIR}/.venv/bin/uvicorn"
+ct test -x "${RELEASE_DIR}/.venv/bin/python"
+ct "${RELEASE_DIR}/.venv/bin/python" -m uvicorn --version >/dev/null
 ct test -s "${RELEASE_DIR}/REVISION"
 
 ct test -s /etc/agent-platform/api.env
@@ -210,6 +211,11 @@ echo
 echo "==> Enabling and starting services"
 
 ct systemctl daemon-reload
+
+ct systemctl reset-failed \
+    agent-platform-api.service \
+    agent-platform-mcp.service \
+    >/dev/null 2>&1 || true
 
 ct systemctl enable \
     agent-platform-api.service \
