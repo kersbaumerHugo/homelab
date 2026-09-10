@@ -148,17 +148,24 @@ else
     remote ip neigh del "$IP_ADDR" dev "$BRIDGE" >/dev/null 2>&1 || true
     remote ping -c 2 -W 1 "$IP_ADDR" >/dev/null 2>&1 || true
 
-    NEIGH="$(remote ip neigh show "$IP_ADDR" || true)"
+    NEIGH="$(
+        remote ip neigh show "$IP_ADDR" dev "$BRIDGE" || true
+)"
 
-    if [[ -n "$NEIGH" ]] &&
-        ! grep -Eq ' (FAILED|INCOMPLETE)$' <<< "$NEIGH"; then
-        echo "[ERROR] IPv4 address $IP_ADDR appears to be in use:"
-        echo "$NEIGH"
-        exit 1
-    fi
+    NEIGH_STATE="$(
+        awk 'NF { print $NF; exit }' <<< "$NEIGH"
+)"
 
-    echo "[OK] no conflicting neighbor observed for $IP_ADDR"
-fi
+    case "$NEIGH_STATE" in
+        ""|FAILED|INCOMPLETE)
+            echo "[OK] no conflicting neighbor observed for $IP_ADDR"
+            ;;
+        *)
+            echo "[ERROR] IPv4 address $IP_ADDR appears to be in use:"
+            echo "$NEIGH"
+            exit 1
+            ;;
+    esac
 
 if ! remote pct status "$VMID" >/dev/null 2>&1; then
     echo
