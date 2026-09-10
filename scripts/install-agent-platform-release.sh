@@ -12,6 +12,10 @@ RELEASE_DIR="${BASE_DIR}/releases/${RELEASE}"
 ARCHIVE="/tmp/agent-platform-${REVISION}.tar.gz"
 SOURCE_URL="https://github.com/kersbaumerHugo/agent-platform/archive/${REVISION}.tar.gz"
 
+LOCAL_INSTALLER="$(mktemp)"
+PVE_INSTALLER="/tmp/agent-platform-install-${VMID}-$$.sh"
+CT_INSTALLER="/tmp/agent-platform-install-$$.sh"
+
 remote() {
     local cmd
     printf -v cmd '%q ' "$@"
@@ -21,6 +25,26 @@ remote() {
 ct() {
     remote pct exec "$VMID" -- "$@"
 }
+
+cleanup() {
+    local rc=$?
+
+    trap - EXIT
+
+    rm -f "$LOCAL_INSTALLER"
+
+    ssh -T "$PVE_HOST" \
+        "rm -f '$PVE_INSTALLER'" \
+        >/dev/null 2>&1 || true
+
+    remote pct exec "$VMID" -- \
+        rm -f "$CT_INSTALLER" "$ARCHIVE" \
+        >/dev/null 2>&1 || true
+
+    exit "$rc"
+}
+
+trap cleanup EXIT
 
 echo "========================================"
 echo " Agent Platform release installation"
@@ -105,16 +129,10 @@ echo "[OK] source archive downloaded"
 echo "     sha256: $SOURCE_SHA256"
 
 echo
-echo "==> Installing release"
+echo "==> Preparing isolated installer"
 
-START_EPOCH="$(date +%s)"
-
-ct bash -s -- \
-    "$BASE_DIR" \
-    "$RELEASE" \
-    "$REVISION" \
-    "$ARCHIVE" \
-    "$SOURCE_SHA256" <<'REMOTE_SCRIPT'
+cat > "$LOCAL_INSTALLER" <<'REMOTE_SCRIPT'
+#!/usr/bin/env bash
 set -euo pipefail
 
 BASE_DIR="$1"
@@ -126,12 +144,13 @@ SOURCE_SHA256="$5"
 RELEASE_DIR="${BASE_DIR}/releases/${RELEASE}"
 STAGE="${BASE_DIR}/releases/.staging-${RELEASE}-$$"
 
-cleanup() {
+cleanup_stage() {
     local rc=$?
     rm -rf "$STAGE"
     exit "$rc"
 }
-trap cleanup EXIT
+
+trap cleanup_stage EXIT
 
 install -d -m 0755 "${BASE_DIR}/releases"
 install -d -m 0755 "$STAGE/app"
@@ -164,10 +183,35 @@ mv "$STAGE" "$RELEASE_DIR"
 trap - EXIT
 REMOTE_SCRIPT
 
+chmod 0755 "$LOCAL_INSTALLER"
+
+scp -q \
+    "$LOCAL_INSTALLER" \
+    "${PVE_HOST}:${PVE_INSTALLER}"
+
+remote pct push \
+    "$VMID" \
+    "$PVE_INSTALLER" \
+    "$CT_INSTALLER"
+
+ct chmod 0755 "$CT_INSTALLER"
+
+echo "[OK] installer staged"
+
+echo
+echo "==> Installing release"
+
+START_EPOCH="$(date +%s)"
+
+ct "$CT_INSTALLER" \
+    "$BASE_DIR" \
+    "$RELEASE" \
+    "$REVISION" \
+    "$ARCHIVE" \
+    "$SOURCE_SHA256"
+
 END_EPOCH="$(date +%s)"
 INSTALL_SECONDS="$((END_EPOCH - START_EPOCH))"
-
-ct rm -f "$ARCHIVE"
 
 echo "[OK] release installed"
 
@@ -182,10 +226,15 @@ INSTALLED_REVISION="$(
 
 ct test -s "${RELEASE_DIR}/DEPENDENCIES.txt"
 ct test -s "${RELEASE_DIR}/SOURCE_SHA256"
+ct test -s "${RELEASE_DIR}/PYTHON"
 ct test -x "${RELEASE_DIR}/.venv/bin/python"
+
+ct "${RELEASE_DIR}/.venv/bin/python" -c \
+    'import agent_platform'
 
 echo "[OK] exact revision recorded"
 echo "[OK] dependency snapshot recorded"
+echo "[OK] package import verified"
 
 echo
 echo "==> Evidence"
