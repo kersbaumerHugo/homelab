@@ -164,6 +164,7 @@ echo "==> Building least-privilege runtime environment"
 
 {
     printf '%s\n' \
+        'AGENT_PLATFORM_MCP_ALLOWED_HOST="192.168.10.30:8001"' \
         'OTEL_TRACES_EXPORTER="otlp"' \
         'OTEL_EXPORTER_OTLP_ENDPOINT="http://192.168.10.20:4317"' \
         'OTEL_EXPORTER_OTLP_INSECURE="true"' \
@@ -231,6 +232,10 @@ ct grep -q '^MODEL_GATEWAY_API_KEY=' \
 
 ct grep -q '^OPENROUTER_MODEL=' \
     /etc/agent-platform/api.env
+
+ct grep -q \
+    '^AGENT_PLATFORM_MCP_ALLOWED_HOST="192.168.10.30:8001"$' \
+    /etc/agent-platform/mcp.env
 
 if ct grep -Eq \
     '^(OPENROUTER_API_KEY|MODEL_GATEWAY_API_KEY)=' \
