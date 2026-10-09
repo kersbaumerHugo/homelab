@@ -1,0 +1,17 @@
+id: ha01-daily
+
+target:
+  type: qemu
+  vmid: 104
+  name: ha01
+
+backup:
+  storage: hdd-backup
+  mode: snapshot
+  compression: zstd
+  schedule: "04:00"
+
+retention:
+  keep_daily: 7
+  keep_weekly: 4
+  keep_monthly: 3

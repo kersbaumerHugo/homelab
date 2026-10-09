@@ -2,8 +2,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PVE_HOST="${PVE_HOST:-pve01}"
-CONFIG="$ROOT/proxmox/pve01/guests/mon01.yml"
+PVE_HOST="${PVE_HOST:-root@pve01}"
+GUEST="${1:-mon01}"
+case "$GUEST" in
+    mon01) GUEST_TYPE="pct" ;;
+    ha01)  GUEST_TYPE="qm" ;;
+    *) echo "[ERROR] Unsupported guest: $GUEST" >&2; exit 1 ;;
+esac
+CONFIG="$ROOT/proxmox/pve01/guests/${GUEST}.yml"
 
 remote() {
     local cmd
@@ -41,17 +47,17 @@ PY
 
 echo "==> Deploying guest boot policy"
 
-remote pct status "$VMID" >/dev/null
+remote "$GUEST_TYPE" status "$VMID" >/dev/null
 
 remote \
-  pct set "$VMID" \
+  "$GUEST_TYPE" set "$VMID" \
   --onboot "$ONBOOT" \
   --startup "order=$ORDER,up=$UP,down=$DOWN"
 
 echo "==> Verifying"
 
 ACTUAL="$(
-    remote pct config "$VMID" \
+    remote "$GUEST_TYPE" config "$VMID" \
       | grep -E '^(onboot|startup):'
 )"
 

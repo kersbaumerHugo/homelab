@@ -3,7 +3,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PVE_HOST="${PVE_HOST:-pve01}"
-CONFIG="$ROOT/proxmox/pve01/backup-jobs/mon01-daily.yml"
+JOB="${1:-mon01-daily}"
+
+case "$JOB" in
+    mon01-daily|ha01-daily) ;;
+    *)
+        echo "[ERROR] Unsupported backup job: $JOB" >&2
+        exit 1
+        ;;
+esac
+
+CONFIG="$ROOT/proxmox/pve01/backup-jobs/${JOB}.yml"
 
 remote() {
     local cmd

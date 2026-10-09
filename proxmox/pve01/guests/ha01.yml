@@ -1,0 +1,9 @@
+vmid: 104
+name: ha01
+type: qemu
+
+boot:
+  onboot: true
+  order: 40
+  startup_delay_seconds: 30
+  shutdown_timeout_seconds: 60
