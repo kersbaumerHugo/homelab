@@ -1,0 +1,33 @@
+network:
+  cidr: 192.168.10.0/24
+  gateway: 192.168.10.1
+  dhcp_pool:
+    start: 192.168.10.100
+    end: 192.168.10.199
+
+hosts:
+  opnsense:
+    ipv4: 192.168.10.1
+    role: firewall
+
+  pve01:
+    ipv4: 192.168.10.10
+    role: hypervisor
+
+  mon01:
+    ipv4: 192.168.10.20
+    role: observability
+
+  agent01:
+    ipv4: 192.168.10.30
+    role: agent-runtime
+
+  inference01:
+    ipv4: 192.168.10.40
+    role: inference
+
+  ha01:
+    ipv4: 192.168.10.50
+    mac: "BC:24:11:26:41:1B"
+    role: home-assistant
+    addressing: dhcp-reservation

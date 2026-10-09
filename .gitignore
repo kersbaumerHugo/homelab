@@ -19,7 +19,6 @@ backups/
 *.tfstate
 *.tfstate.*
 .terraform/
-.terraform.lock.hcl
 .tofu/
 
 # Ansible
@@ -36,3 +35,20 @@ vault-password*
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Local Home Assistant build artifacts
+.cache/
+*.qcow2
+*.qcow2.xz
+
+# OpenTofu saved execution plans
+*.tfplan
+
+# OpenTofu sensitive/local artifacts
+*.tfplan
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
