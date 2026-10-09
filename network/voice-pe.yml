@@ -1,0 +1,60 @@
+# Non-secret desired state. Do not treat the NAT rules below as imported live state.
+# These source IPs come from Nokia DHCP and may change without reservations.
+schema_version: 1
+status: migration-pending
+upstream:
+  network: 192.168.1.0/24
+  gateway: 192.168.1.254
+opnsense:
+  management_url: https://192.168.10.1
+  wan_ipv4: 192.168.1.79
+  lan_ipv4: 192.168.10.1
+  lan_network: 192.168.10.0/24
+home_assistant:
+  ipv4: 192.168.10.50
+  http_port: 80
+  direct_url: http://192.168.10.50
+  advertised_url: http://192.168.1.79:18080
+  proxmox_vmid: 104
+voice_pe:
+  ipv4: 192.168.1.93
+  esphome_tcp_port: 6053
+  wifi_band_ghz: 2.4
+phone:
+  ipv4: 192.168.1.87
+nat:
+  destination:
+    - id: phone-to-ha
+      interface: wan
+      source: 192.168.1.87/32
+      destination: 192.168.1.79
+      destination_port: 18080
+      target: 192.168.10.50
+      target_port: 80
+      description: TEMP - Celular Nokia para HA01
+    - id: voice-to-ha
+      interface: wan
+      source: 192.168.1.93/32
+      destination: 192.168.1.79
+      destination_port: 18080
+      target: 192.168.10.50
+      target_port: 80
+      description: TEMP - Voice PE para HA01
+    - id: ha-hairpin-dnat
+      interface: lan
+      source: 192.168.10.50/32
+      destination: 192.168.1.79
+      destination_port: 18080
+      target: 192.168.10.50
+      target_port: 80
+      description: HA01 - Local NAT Reflection
+  source:
+    - id: ha-hairpin-snat
+      interface: lan
+      source: 192.168.10.50/32
+      destination: 192.168.10.50
+      destination_port: 80
+      translation: 192.168.10.1
+      description: HA01 - Local Hairpin SNAT
+# The live rule objects, order and associated filter policies MUST be audited
+# before any API or IaC adoption; we did not retrieve these from the firewall.
