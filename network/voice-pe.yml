@@ -31,7 +31,7 @@ nat:
       destination_port: 18080
       target: 192.168.10.50
       target_port: 80
-      description: TEMP - Celular Nokia para HA01
+      description: TEMP - HA via Nokia WiFi
     - id: voice-to-ha
       interface: wan
       source: 192.168.1.93/32
