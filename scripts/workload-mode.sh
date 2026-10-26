@@ -31,12 +31,21 @@ set -euo pipefail
 
 action="$1"
 mode="$2"
+THERMAL_LIMIT_C=70  # Conservative planning gate, not a safe operating limit.
 
 state() {
   local result
-  if ! result="$(qm status "$1" 2>/dev/null)"; then
-    echo absent
-    return
+  if ! result="$(qm status "$1" 2>&1)"; then
+    case "$result" in
+      *"does not exist"*)
+        echo absent
+        return 0
+        ;;
+      *)
+        echo "BLOCKED: cannot read VM $1 state: $result" >&2
+        return 1
+        ;;
+    esac
   fi
 
   case "$result" in
@@ -44,7 +53,7 @@ state() {
       echo "${result#status: }"
       ;;
     *)
-      echo "Unexpected VM state: $result" >&2
+      echo "BLOCKED: unexpected VM $1 state: $result" >&2
       return 1
       ;;
   esac
@@ -63,7 +72,8 @@ printf '105 gtnh01:     %s\n' "$gtnh"
 printf '905 restore:    %s\n' "$restore"
 
 echo "===== TEMPERATURA ====="
-sensors | grep -m1 'Package id 0' || true
+temperature_line="$(sensors 2>/dev/null | grep -m1 'Package id 0:' || true)"
+printf '%s\n' "${temperature_line:-unavailable}"
 
 [[ "$action" == status ]] && exit 0
 
@@ -71,17 +81,29 @@ echo
 echo "===== DRY RUN: $mode ====="
 
 if [[ "$ai" == absent || "$gtnh" == absent ]]; then
-  echo "BLOCKED: VM principal ausente."
+  echo "BLOCKED: main VM missing."
   exit 1
 fi
 
 if [[ "$restore" == running ]]; then
-  echo "BLOCKED: VM 905 de restauração está ligada."
+  echo "BLOCKED: restore VM 905 is running."
   exit 1
 fi
 
 if [[ "$ai" == running && "$gtnh" == running ]]; then
-  echo "BLOCKED: IA e GTNH estão ligados simultaneamente."
+  echo "BLOCKED: AI and GTNH are running simultaneously."
+  exit 1
+fi
+
+# Fail closed: no sensor data or unsupported output must block planning.
+if [[ ! "$temperature_line" =~ \+([0-9]+)(\.[0-9]+)?°C ]]; then
+  echo "BLOCKED: CPU temperature unavailable or invalid."
+  exit 1
+fi
+
+temperature_c="${BASH_REMATCH[1]}"
+if (( temperature_c >= THERMAL_LIMIT_C )); then
+  echo "BLOCKED: CPU at ${temperature_c} C (gate: < ${THERMAL_LIMIT_C} C)."
   exit 1
 fi
 
@@ -99,23 +121,22 @@ fi
 
 if [[ "$source_state" == running ]]; then
   if [[ "$source_id" == 105 ]]; then
-    echo "1. Parar Minecraft graciosamente e salvar o mundo."
+    echo "1. Stop Minecraft gracefully and save the world."
   fi
-
-  echo "2. Solicitar shutdown da VM $source_id."
-  echo "3. Aguardar confirmação de VM desligada."
+  echo "2. Request graceful shutdown of VM $source_id."
+  echo "3. Confirm that VM $source_id is stopped."
 else
-  echo "Origem VM $source_id já está desligada."
+  echo "Source VM $source_id is already stopped."
 fi
 
 if [[ "$target_state" == stopped ]]; then
-  echo "4. Verificar pré-condições térmicas e de recursos."
-  echo "5. Iniciar VM $target_id."
-  echo "6. Verificar inicialização e saúde da workload."
+  echo "4. Re-check thermal and resource preconditions before any start."
+  echo "5. Start VM $target_id."
+  echo "6. Verify VM and workload health."
 else
-  echo "Destino VM $target_id já está ligado."
+  echo "Target VM $target_id is already running."
 fi
 
 echo
-echo "DRY RUN: nenhuma alteração realizada."
+echo "DRY RUN: no changes made."
 REMOTE
