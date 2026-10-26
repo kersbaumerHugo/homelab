@@ -1,0 +1,13 @@
+[Unit]
+Description=Homelab CPU Energy Policy
+Documentation=man:systemd.service(5)
+ConditionPathExists=/sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/homelab-cpu-policy apply
+ExecStartPost=/usr/local/sbin/homelab-cpu-policy verify
+
+[Install]
+WantedBy=multi-user.target
