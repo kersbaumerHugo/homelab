@@ -1,0 +1,18 @@
+id: gtnh01-daily
+enabled: false
+
+target:
+  type: qemu
+  vmid: 105
+  name: gtnh01
+
+backup:
+  storage: hdd-backup
+  mode: stop
+  compression: zstd
+  schedule: "05:00"
+
+retention:
+  keep_daily: 7
+  keep_weekly: 4
+  keep_monthly: 3

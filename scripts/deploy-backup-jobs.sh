@@ -6,7 +6,7 @@ PVE_HOST="${PVE_HOST:-pve01}"
 JOB="${1:-mon01-daily}"
 
 case "$JOB" in
-    mon01-daily|ha01-daily) ;;
+    mon01-daily|ha01-daily|gtnh01-daily) ;;
     *)
         echo "[ERROR] Unsupported backup job: $JOB" >&2
         exit 1
@@ -26,7 +26,7 @@ remote() {
     exit 1
 }
 
-read -r JOB_ID VMID STORAGE MODE COMPRESS SCHEDULE DAILY WEEKLY MONTHLY < <(
+read -r JOB_ID VMID STORAGE MODE COMPRESS SCHEDULE DAILY WEEKLY MONTHLY ENABLED < <(
     python3 - "$CONFIG" <<'PY'
 import sys
 import yaml
@@ -43,6 +43,7 @@ print(
     d["retention"]["keep_daily"],
     d["retention"]["keep_weekly"],
     d["retention"]["keep_monthly"],
+    int(d.get("enabled", True)),
 )
 PY
 )
@@ -68,7 +69,7 @@ then
         --compress "$COMPRESS" \
         --schedule "$SCHEDULE" \
         --prune-backups "$PRUNE" \
-        --enabled 1
+        --enabled "$ENABLED"
 else
     echo "Job does not exist; creating"
 
@@ -80,7 +81,7 @@ else
         --compress "$COMPRESS" \
         --schedule "$SCHEDULE" \
         --prune-backups "$PRUNE" \
-        --enabled 1
+        --enabled "$ENABLED"
 fi
 
 echo
