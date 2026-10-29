@@ -158,7 +158,6 @@ these questions for the current platform state.
 
 - System inventory: `pve01.md` documents all hardware, storage, and guests
 - Compute architecture: `docs/architecture/compute.md` includes all guests
-- GPU inventory: `inventory/gpu.md` tracks GPU passthrough configuration
 - Guest YAML files: All guests have `.yml` files in `proxmox/pve01/guests/`
 - Network addressing: `network/addressing.yml` updated for DHCP reservations
 - Script discovery: `scripts/deploy-guest-policy.sh` discovers guest type dynamically
