@@ -46,7 +46,11 @@ Stress testing caused temperatures above 90 C and thermal throttling.
 Sustained CPU-heavy workloads should therefore be avoided until the
 cooling solution is replaced.
 
-A temporary NVIDIA GT610 is currently installed for display purposes.
+The host has two discrete GPUs: an NVIDIA GeForce RTX 3060 (12 GiB) passed
+through to `inference01` for local model inference, and an NVIDIA GeForce GT 610
+used for the host console only.
+
+The RTX 3060 is bound to `vfio-pci` and is not available to the host.
 
 ## Storage
 
