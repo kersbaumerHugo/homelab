@@ -38,10 +38,22 @@ Covers:
 - pve01 hardware;
 - Proxmox responsibilities;
 - mon01;
+- inference01;
 - startup ordering;
 - shutdown orchestration;
 - thermal limitations;
 - compute failure domain.
+
+### [Inference](inference.md)
+
+Covers:
+
+- inference01 placement and resources;
+- GPU passthrough;
+- llama-server stack;
+- context and slot capacity;
+- clients;
+- failure domain.
 
 ### [Storage](storage.md)
 

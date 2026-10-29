@@ -43,7 +43,8 @@ Current `pve01` hardware:
 - NIC: Intel I219-V
 - Network link: 1 Gbps full duplex
 - Power supply: Corsair RM750x
-- Temporary GPU: NVIDIA GT610
+- Inference GPU: NVIDIA GeForce RTX 3060, 12 GiB (`01:00.0`)
+- Display GPU: NVIDIA GeForce GT 610 (`03:00.0`)
 - Virtualization extensions: enabled
 - VT-d / IOMMU: enabled
 
@@ -59,23 +60,20 @@ Proxmox VE is responsible for:
 - guest shutdown orchestration;
 - workload placement on local storage.
 
-## Current infrastructure workload
+## Current infrastructure workloads
 
-The first infrastructure workload is:
+Guests that provide platform infrastructure:
 
-`mon01`
+| Guest | VMID | Type | Role |
+|---|---|---|---|
+| `mon01` | 100 | LXC | Monitoring and observability |
+| `inference01` | 103 | QEMU VM | Local model inference |
 
-VMID:
+`mon01` is described in the next section. `inference01` is described under
+[inference01 resource allocation](#inference01-resource-allocation) and in
+[Inference](inference.md).
 
-`100`
-
-Type:
-
-LXC
-
-Role:
-
-Monitoring and observability.
+Further guests are versioned under `proxmox/pve01/guests/`.
 
 ## mon01 resource allocation
 
@@ -89,6 +87,22 @@ Current allocation:
 
 `mon01` is intentionally lightweight because its current workload consists
 primarily of infrastructure monitoring services.
+
+## inference01 resource allocation
+
+Current allocation:
+
+- 4 vCPU (`cpu: host`)
+- 8 GiB RAM, memory ballooning disabled
+- 64 GB disk on `local-lvm`, `virtio-scsi-single`
+- `q35` machine type, OVMF firmware
+- GPU passthrough: `hostpci0` `0000:01:00.0`, `hostpci1` `0000:01:00.1`
+- network: `virtio` on `vmbr0`
+- guest agent: enabled
+
+`inference01` owns the only compute GPU in the homelab. It serves an
+OpenAI-compatible inference endpoint used by `agent01` and by developer
+workstations.
 
 ## Container model
 
@@ -113,10 +127,23 @@ startup delay = 30 seconds
 shutdown timeout = 60 seconds
 ```
 
+Current `inference01` policy:
+
+```text
+onboot = true
+order = 40
+startup delay = 30 seconds
+shutdown timeout = 60 seconds
+```
+
+`inference01` starts later than `mon01` because it is a consumer of platform
+infrastructure rather than a foundation service.
+
 The desired state is versioned under:
 
 ```text
 proxmox/pve01/guests/mon01.yml
+proxmox/pve01/guests/inference01.yml
 ```
 
 Current planned ordering convention:
@@ -220,10 +247,16 @@ Until the cooling solution is upgraded:
 
 ## Display configuration
 
-A temporary NVIDIA GT610 is currently installed.
+The GT 610 at `03:00.0` is used for the host console only. It is not used for
+compute.
 
-The host currently uses a persistent `nomodeset` GRUB configuration to keep
-boot behavior stable with the temporary display setup.
+The RTX 3060 is bound to `vfio-pci` and is not available to the host. The
+`nvidia`, `nvidia_drm`, `nvidia_modeset`, `nvidia_uvm` and `nouveau` modules are
+blacklisted through `blacklist-gpu-passthrough.conf` so the device can be
+assigned to `inference01`.
+
+The host keeps a persistent `nomodeset` GRUB configuration because the display
+GPU has no usable accelerated driver under Proxmox.
 
 This is considered a temporary compatibility measure rather than a long-term
 platform requirement.

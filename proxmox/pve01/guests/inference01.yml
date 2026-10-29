@@ -1,0 +1,41 @@
+vmid: 103
+name: inference01
+type: qemu
+
+firmware:
+  machine: q35
+  bios: ovmf
+
+resources:
+  cores: 4
+  cpu: host
+  memory_mib: 8192
+  balloon_mib: 0
+  rootfs:
+    storage: local-lvm
+    size_gib: 64
+    discard: true
+    ssd: true
+    iothread: true
+
+gpu:
+  passthrough:
+    - address: "0000:01:00.0"
+      pcie: true
+    - address: "0000:01:00.1"
+      pcie: true
+
+network:
+  interface: net0
+  model: virtio
+  bridge: vmbr0
+  mac: "BC:24:11:2E:46:9E"
+
+agent:
+  enabled: true
+
+boot:
+  onboot: true
+  order: 40
+  startup_delay_seconds: 30
+  shutdown_timeout_seconds: 60

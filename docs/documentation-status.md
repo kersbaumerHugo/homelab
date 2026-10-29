@@ -18,6 +18,7 @@ Baseline date:
 | Compute architecture | Yes | Yes | Complete for current state |
 | Storage architecture | Yes | Yes | Complete for current state |
 | Observability architecture | Yes | Yes | Complete for current state |
+| Inference architecture | Yes | Yes | Complete for current state |
 | Backup architecture | Yes | Yes | Complete for current state |
 | Current platform state | Yes | Yes | Complete |
 | Reliability posture | Yes | Yes | Complete |
@@ -30,6 +31,7 @@ Baseline date:
 | Monitoring deploy runbook | Yes | Yes | Complete |
 | Monitoring rollback runbook | Yes | Yes | Complete |
 | mon01 backup/restore runbook | Yes | Yes | Complete |
+| Inference server runbook | Yes | Partially | Complete for current scope |
 | Troubleshooting runbook | Yes | Partially | Complete for current scope |
 | Disaster recovery runbook | Yes | Partially | Complete for current capability |
 | Guest management runbook | Yes | Yes | Complete |
