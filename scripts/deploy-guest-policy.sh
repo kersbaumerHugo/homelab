@@ -5,12 +5,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PVE_HOST="${PVE_HOST:-root@pve01}"
 GUEST="${1:-mon01}"
 
-# Discover guest type dynamically from Proxmox
-GUEST_TYPE=$(ssh "$PVE_HOST" "case $(pct list | grep -w '^${GUEST}$' || qm list | grep -w '^${GUEST}$') in
-    *Name*) echo 'unknown' ;;
-    *) echo 'unknown' ;;
-esac" 2>/dev/null || echo "unknown")
-
 # Determine guest type based on Proxmox commands
 if pct list 2>/dev/null | grep -qw "^${GUEST}$"; then
     GUEST_TYPE="pct"
