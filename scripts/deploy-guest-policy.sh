@@ -4,11 +4,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PVE_HOST="${PVE_HOST:-root@pve01}"
 GUEST="${1:-mon01}"
-case "$GUEST" in
-    mon01) GUEST_TYPE="pct" ;;
-    ha01)  GUEST_TYPE="qm" ;;
-    *) echo "[ERROR] Unsupported guest: $GUEST" >&2; exit 1 ;;
-esac
+
+# Determine guest type based on Proxmox commands
+if pct list 2>/dev/null | grep -qw "^${GUEST}$"; then
+    GUEST_TYPE="pct"
+elif qm list 2>/dev/null | grep -qw "^${GUEST}$"; then
+    GUEST_TYPE="qm"
+else
+    echo "[ERROR] Guest $GUEST not found on $PVE_HOST" >&2
+    exit 1
+fi
 CONFIG="$ROOT/proxmox/pve01/guests/${GUEST}.yml"
 
 remote() {

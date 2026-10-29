@@ -157,3 +157,30 @@ Custom metrics collectors:
 - LVM
 - SMART
 - backup state
+
+## Guest Inventory
+
+### LXC Containers
+
+| VMID | Name    | Status   | Purpose          | Cores | Memory  | RootFS  | Network      |
+|------|---------|----------|------------------|-------|---------|---------|---------------|
+| 100  | mon01   | running  | Observability    | 2     | 4096 MB | 32 GB   | DHCP (192.168.10.162) |
+| 101  | trace01 | running  | Distributed tracing | 2     | 4096 MB | 16 GB   | 192.168.10.20/24 |
+| 102  | agent01 | running  | Agent runtime    | 2     | 2048 MB | 16 GB   | 192.168.10.30/24 |
+
+### QEMU VMs
+
+| VMID | Name          | Status   | Purpose        | Cores | Memory  | Boot Disk  | GPU Passthrough |
+|------|---------------|----------|----------------|-------|---------|------------|-----------------|
+| 103  | inference01   | running  | GPU inference  | 4     | 8192 MB | 64 GB SSD  | RTX 3060 (2x)  |
+| 104  | ha01          | running  | Home Assistant | 4     | 4096 MB | 64 GB      | -               |
+| 105  | gtnh01        | stopped  | GoldenHugo     | -     | 8192 MB | 40 GB      | -               |
+
+### Purpose Summary
+
+- **mon01**: Observability node (Prometheus, Grafana, node_exporter)
+- **trace01**: Distributed tracing backend (Tempo)
+- **agent01**: Agent runtime environment (container engine for services)
+- **inference01**: GPU-accelerated inference workloads (RTX 3060 passthrough)
+- **ha01**: Home Assistant OS automation hub
+- **gtnh01**: Stopped GoldenHugo test environment

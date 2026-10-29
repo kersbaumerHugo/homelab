@@ -34,6 +34,7 @@ Baseline date:
 | Inference server runbook | Yes | Partially | Complete for current scope |
 | Troubleshooting runbook | Yes | Partially | Complete for current scope |
 | Disaster recovery runbook | Yes | Partially | Complete for current capability |
+| Guest management runbook | Yes | Yes | Complete |
 | Bare-metal pve01 rebuild | Partial | No | Gap |
 | OPNsense replacement drill | Partial | No | Gap |
 | Off-host backup restore | No | No | Blocked by hardware |
@@ -152,3 +153,24 @@ What should be built next?
 
 As of the baseline date, the repository documentation is intended to satisfy
 these questions for the current platform state.
+
+## Current documentation completion status
+
+### Completed
+
+- System inventory: `pve01.md` documents all hardware, storage, and guests
+- Compute architecture: `docs/architecture/compute.md` includes all guests
+- Guest YAML files: All guests have `.yml` files in `proxmox/pve01/guests/`
+- Network addressing: `network/addressing.yml` updated for DHCP reservations
+- Script discovery: `scripts/deploy-guest-policy.sh` discovers guest type dynamically
+- Documentation status tracking: `docs/documentation-status.md` updated
+- Runbook index: `docs/runbooks/README.md` includes all runbooks
+
+### In progress
+
+- Bare-metal pve01 rebuild: Conceptual recovery documented, not yet tested
+
+### Future
+
+- Off-host backup restore: Blocked by hardware availability
+- Off-site recovery: Planned for future hardware acquisition
