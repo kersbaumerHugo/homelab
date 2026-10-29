@@ -157,7 +157,6 @@ Custom metrics collectors:
 | 103  | inference01   | running  | GPU inference  | 4     | 8192 MB | 64 GB SSD  | RTX 3060 (2x)  |
 | 104  | ha01          | running  | Home Assistant | 4     | 4096 MB | 64 GB      | -               |
 | 105  | gtnh01        | stopped  | GoldenHugo     | -     | 8192 MB | 40 GB      | -               |
-| 905  | gtnh-restore-test | stopped | GoldenHugo restore test | - | 8192 MB | 40 GB      | -               |
 
 ### Purpose Summary
 
@@ -167,4 +166,3 @@ Custom metrics collectors:
 - **inference01**: GPU-accelerated inference workloads (RTX 3060 passthrough)
 - **ha01**: Home Assistant OS automation hub
 - **gtnh01**: Stopped GoldenHugo test environment
-- **gtnh-restore-test**: Stopped GoldenHugo restore test VM

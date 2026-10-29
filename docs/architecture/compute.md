@@ -27,7 +27,6 @@ Physical host
     +-- VM 103 - inference01 (GPU inference)
     +-- VM 104 - ha01 (Home Assistant)
     +-- VM 105 - gtnh01 (stopped)
-    +-- VM 905 - gtnh-restore-test (stopped)
     +-- future infrastructure workloads
     +-- future application workloads
 ```
