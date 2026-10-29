@@ -269,7 +269,11 @@ Severity:
 
 ### Description
 
-pve01 currently uses a temporary NVIDIA GT610 and persistent `nomodeset`.
+pve01 uses an NVIDIA GeForce GT 610 for the host console and a persistent
+`nomodeset` GRUB configuration.
+
+The separate RTX 3060 used for inference is bound to `vfio-pci`, so the host has
+no accelerated GPU path of its own.
 
 ### Current mitigation
 
@@ -277,7 +281,8 @@ The current configuration boots reliably.
 
 ### Exit criterion
 
-Replace or remove the temporary GPU requirement and revalidate boot behavior.
+Replace or remove the temporary display GPU and the `nomodeset` requirement and
+revalidate boot behavior.
 
 ---
 

@@ -40,6 +40,16 @@ Use for:
 - restore drills;
 - validating restored services.
 
+### [Inference Server](inference-server.md)
+
+Use for:
+
+- checking inference health;
+- inspecting context and slot configuration;
+- changing context size or slot count;
+- reverting tuning;
+- rotating the API token.
+
 ### [Troubleshooting](troubleshooting.md)
 
 Use as the default first-response procedure for:

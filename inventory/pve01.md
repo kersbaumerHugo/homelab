@@ -45,7 +45,25 @@ Current negotiated link:
 
 ### GPU
 
-Temporary NVIDIA GT610
+Two discrete GPUs are installed.
+
+Inference GPU:
+
+- Model: NVIDIA GeForce RTX 3060 (GA104)
+- Memory: 12 GiB
+- PCI address: `01:00.0`, audio function `01:00.1`
+- Kernel driver in use: `vfio-pci`
+- Role: passed through to `inference01` (VMID 103) as `hostpci0` and `hostpci1`
+
+Display GPU:
+
+- Model: NVIDIA GeForce GT 610 (GF119)
+- PCI address: `03:00.0`
+- Kernel driver in use: none
+- Role: host console only
+
+The `nvidia` and `nouveau` modules are blacklisted for the passthrough device
+through `/etc/modprobe.d/blacklist-gpu-passthrough.conf`.
 
 The system currently uses a persistent `nomodeset` GRUB configuration.
 

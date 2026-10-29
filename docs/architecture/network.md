@@ -27,9 +27,9 @@ model, responsibilities and known limitations.
                  /            \
               pve01          clients
          192.168.10.10
-                |
-              mon01
-         192.168.10.162
+           /          \
+        mon01      inference01
+   192.168.10.162  192.168.10.40
 ```
 
 ## LAN
@@ -73,8 +73,11 @@ igc0 | igc1 | igc2 | igc3
 | OPNsense | 192.168.10.1 | Gateway / firewall |
 | pve01 | 192.168.10.10 | Proxmox management |
 | mon01 | 192.168.10.162 | Monitoring platform |
+| inference01 | 192.168.10.40 | Local model inference |
 
 mon01 uses a DHCP reservation.
+
+inference01 uses a static address configured inside the guest.
 
 ## Routing
 
