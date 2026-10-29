@@ -15,8 +15,9 @@ hosts:
     role: hypervisor
 
   mon01:
-    ipv4: 192.168.10.20
+    ipv4: dhcp:192.168.10.162
     role: observability
+    addressing: dhcp-reservation
 
   agent01:
     ipv4: 192.168.10.30

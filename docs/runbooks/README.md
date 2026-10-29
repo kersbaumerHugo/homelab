@@ -15,6 +15,15 @@ Use for:
 - validating automatic mon01 startup;
 - graceful platform shutdown.
 
+### [Guest Management](guest-management.md)
+
+Use for:
+
+- discovering all guests on pve01;
+- validating guest inventory;
+- managing guest lifecycle;
+- troubleshooting guest failures.
+
 ### [Monitoring Deployment](monitoring-deploy.md)
 
 Use for:
@@ -47,6 +56,11 @@ Use as the default first-response procedure for:
 - network problems;
 - pve01 problems;
 - mon01 problems;
+- trace01 problems;
+- agent01 problems;
+- inference01 problems;
+- ha01 problems;
+- gtnh01 problems;
 - monitoring failures;
 - storage issues;
 - custom collector issues.
@@ -56,6 +70,11 @@ Use as the default first-response procedure for:
 Use for:
 
 - mon01 loss;
+- trace01 loss;
+- agent01 loss;
+- inference01 loss;
+- ha01 loss;
+- gtnh01 loss;
 - backup policy loss;
 - primary SSD failure;
 - complete host-loss analysis;

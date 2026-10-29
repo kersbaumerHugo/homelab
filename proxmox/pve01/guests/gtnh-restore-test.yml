@@ -1,0 +1,34 @@
+vmid: 905
+name: gtnh-restore-test
+type: qemu
+
+os:
+  template: local:vmtemplate/centos-stream9.tar.zst
+  ostype: centos
+
+resources:
+  cores: 4
+  memory_mib: 8192
+  swap_mib: 512
+  rootfs:
+    storage: local-lvm
+    size_gib: 40
+
+network:
+  interface: eth0
+  bridge: vmbr0
+  ipv4: dhcp:192.168.10.166
+  gateway4: 192.168.10.1
+
+security:
+  secureboot: false
+  iommu: false
+
+boot:
+  onboot: true
+  order: 51
+  startup_delay_seconds: 15
+  shutdown_timeout_seconds: 60
+
+status: stopped
+purpose: goldenhugo-restore-test

@@ -1,0 +1,13 @@
+[Unit]
+Description=Apply NVIDIA GPU baseline policy
+After=nvidia-persistenced.service
+Requires=nvidia-persistenced.service
+ConditionPathExists=/usr/bin/nvidia-smi
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/configure-gpu-baseline.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
