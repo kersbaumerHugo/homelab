@@ -15,14 +15,12 @@ Use for:
 - validating automatic mon01 startup;
 - graceful platform shutdown.
 
-### [Guest Management](guest-management.md)
+### Guest Management
 
-Use for:
+Guest management is documented in the inventory:
 
-- discovering all guests on pve01;
-- validating guest inventory;
-- managing guest lifecycle;
-- troubleshooting guest failures.
+- [`inventory/pve01.md`](../../inventory/pve01.md) - Complete inventory of all guests and infrastructure on pve01
+- Individual guest documentation in `inventory/` directory
 
 ### [Monitoring Deployment](monitoring-deploy.md)
 
